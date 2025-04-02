@@ -1,0 +1,11 @@
+
+
+# env files (can opt-in for committing if needed)
+.env*
+/backend/.env
+client-secrect.json
+node_modules
+/frontend/node_modules
+/backend/node_modules
+/backend/.env
+/frontend/.env
