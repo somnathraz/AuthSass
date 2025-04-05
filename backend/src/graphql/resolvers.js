@@ -43,6 +43,7 @@ module.exports = {
       return await AuditLog.find({}).sort({ timestamp: -1 });
     },
     myApps: async (_, __, { req }) => {
+      // console.log(req.userId, "req.userId");
       if (!req.userId) throw new Error("Not authenticated!");
       return await App.find({ owner: req.userId });
     },
@@ -87,10 +88,20 @@ module.exports = {
       // Set the token as an HTTP-only cookie so that it is available on all routes
       res.cookie("token", accessToken, {
         httpOnly: true,
+        domain: "localhost",
         secure: process.env.NODE_ENV === "production",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         sameSite: "lax",
-        domain: "localhost", // Adjust for production domain
+        path: "/",
+      });
+
+      // Set the refresh token as an HTTP-only cookie as well
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (or adjust as needed)
+        sameSite: "lax",
+        domain: "localhost",
         path: "/",
       });
       await logEvent("SIGNUP", user._id, { email });
@@ -143,8 +154,18 @@ module.exports = {
         path: "/",
       });
       // 4) (Risk management removed)
+      // 6) Set the refresh token as an HTTP-only cookie
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: "lax",
+        domain: "localhost",
+        path: "/",
+      });
 
       // 5) Return tokens and user data
+      await logEvent("LOGIN", { email });
       return { accessToken, refreshToken, user };
     },
     resetPassword: async (_, { token, newPassword }) => {
@@ -162,28 +183,30 @@ module.exports = {
       return "Password reset successful. You can now log in.";
     },
     // For exchanging refreshToken -> new access token
-    refreshToken: async (_, { refreshToken }) => {
-      const foundToken = await RefreshToken.findOne({ token: refreshToken });
+    refreshToken: async (_, { refreshToken }, { req }) => {
+      // If the refreshToken argument is missing, try reading it from the cookie
+      const tokenFromCookie = refreshToken || req.cookies?.refreshToken;
+      if (!tokenFromCookie) {
+        throw new Error("No refresh token provided.");
+      }
+      const foundToken = await RefreshToken.findOne({ token: tokenFromCookie });
       if (!foundToken) throw new Error("Invalid refresh token!");
-
       // Check if expired
       if (foundToken.expiresAt < new Date()) {
         throw new Error("Refresh token expired!");
       }
-
       // Retrieve user
       const user = await User.findById(foundToken.userId);
       if (!user) throw new Error("User not found!");
-
       // Generate a fresh access token
       const newAccessToken = jwt.sign(
         { userId: user._id, email: user.email },
         process.env.JWT_SECRET,
         { expiresIn: "15m" }
       );
-
       return { accessToken: newAccessToken };
     },
+
     updateUserRole: async (_, { userId, role }, { req }) => {
       //   console.log(userId, "userid here");
 
@@ -246,18 +269,31 @@ module.exports = {
       // Generate JWT tokens (access & refresh)
       const { accessToken, refreshToken } = await generateTokens(user);
       // Set the access token in an HTTP-only cookie
-      console.log("Access token:", accessToken);
-      console.log(
-        "Response object:",
-        res?.cookie ? "OK" : "Missing res.cookie"
-      );
+      // console.log("Access token:", accessToken);
+      // console.log(
+      //   "Response object:",
+      //   res?.cookie ? "OK" : "Missing res.cookie"
+      // );
+
       res.cookie("token", accessToken, {
         httpOnly: true,
         secure: false,
+        domain: "localhost",
         maxAge: 30 * 24 * 60 * 60 * 1000,
         sameSite: "lax",
         path: "/",
       });
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: false,
+        domain: "localhost",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: "lax",
+        path: "/",
+      });
+      // Set the refresh token as an HTTP-only cookie as well
+
+      await logEvent("SIGNUP", { email });
       return { accessToken, refreshToken, user };
     },
     createApiKey: async (_, __, { req }) => {

@@ -8,11 +8,12 @@ import { useLogin, useSocialLogin } from "@/services/authService";
 import Link from "next/link";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAppStore } from "@/store/appStore";
 
 export default function SignInForm() {
   const { login } = useLogin();
   const { socialLogin } = useSocialLogin();
-
+  const setUser =useAppStore((state) => state.setUser);
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +26,13 @@ export default function SignInForm() {
       const response = await login(email, password);
       console.log("Login successful:", response.data.login);
       // Save tokens to localStorage or set in context
+      const userData = response.data.login;
+      setUser({
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        image: userData.image,
+      });
       router.push("/");
       // e.g., localStorage.setItem("accessToken", response.data.login.accessToken);
     } catch (error: unknown) {
@@ -54,6 +62,13 @@ export default function SignInForm() {
             .then((res) => {
               console.log("Google login successful:", res.data.socialLogin);
               // Update auth context, redirect user, etc.
+              const userData = res.data.socialLogin;
+              setUser({
+                id: userData.user.id,
+                name: userData.user.username,
+                email: userData.user.email,
+                image: userData.image,
+              });
               router.push("/");
             })
             .catch((err) => {

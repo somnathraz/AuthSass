@@ -4,11 +4,14 @@ import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import { useSignup, useSocialLogin } from "@/services/authService";
+import { useAppStore } from "@/store/appStore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 
+
 export default function SignUpForm() {
+  const setUser =useAppStore((state) => state.setUser);
   const { signup } = useSignup();
   const router = useRouter();
   const { socialLogin } = useSocialLogin();
@@ -22,16 +25,22 @@ export default function SignUpForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await signup(userName,email, password);
-      console.log("Login successful:", response.data.login);
+      const response = await signup(userName, email, password);
+      // Use response.data.signup instead of response.data.login
+      const userData = response.data.signup;
+      setUser({
+        id: userData.user.id,
+        name: userData.user.username,
+        email: userData.user.email,
+        image: userData.user.image,
+      });
+      console.log("Signup successful:", userData);
       router.push("/");
-      // Save tokens to localStorage or set in context
-      // e.g., localStorage.setItem("accessToken", response.data.login.accessToken);
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error("Login error:", error.message);
+        console.error("Signup error:", error.message);
       } else {
-        console.error("Login error:", error);
+        console.error("Signup error:", error);
       }
     }
   };
@@ -54,6 +63,13 @@ export default function SignUpForm() {
             .then((res) => {
               console.log("Google login successful:", res.data.socialLogin);
               // Update auth context, redirect user, etc.
+              const userData = res.data.socialLogin;
+            setUser({
+              id: userData.user.id,
+              name: userData.user.username,
+              email: userData.user.email,
+              image: userData.image,
+            });
               router.push("/");
             })
             .catch((err) => {

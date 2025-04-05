@@ -4,26 +4,33 @@ const User = require("../models/User");
 const { generateAccessToken } = require("../utils/auth");
 
 module.exports = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = authHeader.split(" ")[1]; // Extract the token from "Bearer <token>"
+  console.log("Cookies:", req.cookies);
 
+  let token;
+  if (req.headers.authorization) {
+    token = req.headers.authorization.split(" ")[1];
+    console.log("Token from header:", token);
+  } else if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+    console.log("Token from cookie:", token);
+  }
+
+  if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.userId = decoded.userId; // Attach userId to the request
-      return next(); // Continue with request
+      // console.log("Decoded token:", decoded);
+      req.userId = decoded.userId; // Ensure the token was signed with a `userId` field
+      return next();
     } catch (err) {
       if (err.name === "TokenExpiredError") {
         console.log("🔄 Token expired, attempting to refresh...");
+        const refreshToken =
+          req.headers["x-refresh-token"] || req.cookies.refreshToken;
 
-        // Extract refresh token from request headers
-        const refreshToken = req.headers["x-refresh-token"];
         if (!refreshToken) {
           console.log("❌ No refresh token provided.");
           return res.status(401).json({ error: "Refresh token required." });
         }
-
-        // Check if refresh token exists in database
         const storedToken = await RefreshToken.findOne({ token: refreshToken });
         if (!storedToken || storedToken.expiresAt < new Date()) {
           console.log("❌ Invalid or expired refresh token.");
@@ -31,28 +38,30 @@ module.exports = async (req, res, next) => {
             .status(401)
             .json({ error: "Refresh token invalid or expired." });
         }
-
-        // Fetch user associated with refresh token
         const user = await User.findById(storedToken.userId);
         if (!user) {
           console.log("❌ User not found for refresh token.");
           return res.status(401).json({ error: "User not found." });
         }
-
-        // Generate a new access token
         const newAccessToken = generateAccessToken(user);
         console.log("✅ New access token generated!");
-
-        // Attach new token to the response header
         res.setHeader("x-new-access-token", newAccessToken);
-        req.userId = user._id; // Attach userId to request
+        // Optionally update the cookie as well:
+        res.cookie("token", newAccessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 30 * 24 * 60 * 60 * 1000,
+          sameSite: "lax",
+          path: "/",
+        });
+        req.userId = user._id;
         return next();
       }
-
       console.log("Invalid token:", err);
       return res.status(401).json({ error: "Invalid token." });
     }
   }
 
+  console.log("No token found");
   next();
 };

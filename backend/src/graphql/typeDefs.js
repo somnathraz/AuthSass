@@ -37,7 +37,9 @@ module.exports = gql`
   }
 
   type SignupResponse {
-    message: String!
+    accessToken: String!
+    refreshToken: String!
+    user: User!
   }
 
   type AuditLog {

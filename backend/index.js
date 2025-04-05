@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
 const typeDefs = require("./src/graphql/typeDefs");
+const cookieParser = require("cookie-parser");
 const resolvers = require("./src/graphql/resolvers");
 const allowedOrigin = "http://localhost:3000";
 const authMiddleware = require("./src/middleware/authMiddleware");
@@ -24,7 +25,7 @@ const startServer = async () => {
       credentials: true,
     })
   );
-
+  app.use(cookieParser());
   // Global limiter for all requests (increase overall limit to avoid interfering with normal operations)
   const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
