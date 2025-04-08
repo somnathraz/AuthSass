@@ -1,5 +1,6 @@
 // graphql/resolvers.js
 const User = require("../models/User");
+
 const {
   hashPassword,
   comparePassword,
@@ -18,6 +19,7 @@ const GraphQLJSON = require("graphql-type-json");
 const crypto = require("crypto");
 const ApiKey = require("../models/ApiKey");
 const App = require("../models/App");
+const Organization = require("../models/Organization");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const dummyPassword = process.env.DUMMY_PASSWORD;
@@ -35,12 +37,12 @@ module.exports = {
       checkRole(currentUser, ["admin"]); // Only admin can list users
       return await User.find({});
     },
-    auditLogs: async (_, __, { req }) => {
-      // Only allow admin to access audit logs
+    auditLogs: async (_, { appId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       const currentUser = await User.findById(req.userId);
-      checkRole(currentUser, ["admin"]);
-      return await AuditLog.find({}).sort({ timestamp: -1 });
+      checkRole(currentUser, ["admin"]); // Only admin can view audit logs
+      // Filter audit logs by the provided appId and sort by timestamp descending
+      return await AuditLog.find({ appId }).sort({ timestamp: -1 });
     },
     myApps: async (_, __, { req }) => {
       // console.log(req.userId, "req.userId");
@@ -65,16 +67,29 @@ module.exports = {
       if (existingUser) throw new Error("User already exists!");
 
       const passwordHash = await hashPassword(password);
-
-      // Generate verification token
       const verificationToken = uuidv4();
 
+      // Create user with default accountType "personal" and default role "admin"
       const user = await User.create({
         username,
         email,
         passwordHash,
         verificationToken,
+        accountType: "personal",
+        role: "admin",
       });
+
+      // Create a personal organization for the user
+      const organizationName = `${username}'s Organization`;
+      const organization = await Organization.create({
+        name: organizationName,
+        owner: user._id,
+        members: [user._id],
+      });
+
+      // Update user with the created organization ID
+      user.organizationId = organization._id;
+      await user.save();
 
       // Send verification email
       const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
@@ -83,27 +98,26 @@ module.exports = {
         "Verify Your Email",
         `Click here to verify: ${verificationLink}`
       );
-      // Generate JWT tokens (access and refresh)
+
       const { accessToken, refreshToken } = await generateTokens(user);
-      // Set the token as an HTTP-only cookie so that it is available on all routes
+
       res.cookie("token", accessToken, {
         httpOnly: true,
         domain: "localhost",
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: "lax",
+        path: "/",
+      });
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        domain: "localhost",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
         sameSite: "lax",
         path: "/",
       });
 
-      // Set the refresh token as an HTTP-only cookie as well
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (or adjust as needed)
-        sameSite: "lax",
-        domain: "localhost",
-        path: "/",
-      });
       await logEvent("SIGNUP", user._id, { email });
       return { accessToken, refreshToken, user };
     },
@@ -296,6 +310,112 @@ module.exports = {
       await logEvent("SIGNUP", { email });
       return { accessToken, refreshToken, user };
     },
+    createOrganization: async (_, { name }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+      const user = await User.findById(req.userId);
+      // Create organization with the current user as owner/admin
+      const organization = await Organization.create({
+        name,
+        owner: req.userId,
+        members: [req.userId],
+        createdAt: new Date().toISOString(),
+      });
+      // Optionally, update the user's organization reference
+      user.organization = organization.id;
+      await user.save();
+      return organization;
+    },
+    addOrganizationMember: async (_, { orgId, memberEmail, role }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+
+      // Verify the requester is admin in the organization
+      const currentUser = await User.findById(req.userId);
+      if (
+        !currentUser.organizationId ||
+        currentUser.organizationId.toString() !== orgId
+      )
+        throw new Error("You do not belong to this organization.");
+      if (currentUser.role !== "admin")
+        throw new Error("Only admin can add members.");
+
+      // Find the user to add
+      const memberUser = await User.findOne({ email: memberEmail });
+      if (!memberUser) throw new Error("User not found.");
+
+      const organization = await Organization.findById(orgId);
+      if (!organization) throw new Error("Organization not found.");
+
+      // Check if the user is already a member
+      if (organization.members.includes(memberUser._id))
+        throw new Error("User is already a member.");
+
+      organization.members.push(memberUser._id);
+      await organization.save();
+
+      // Optionally, update the user's organizationId if they don't have one
+      if (!memberUser.organizationId) {
+        memberUser.organizationId = orgId;
+        // Optionally, update the user's role if needed
+        memberUser.role = role || "member";
+        await memberUser.save();
+      }
+      return organization;
+    },
+
+    removeOrganizationMember: async (_, { orgId, userId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+
+      // Ensure the requester is an admin of the organization
+      const currentUser = await User.findById(req.userId);
+      if (
+        !currentUser.organizationId ||
+        currentUser.organizationId.toString() !== orgId
+      )
+        throw new Error("You do not belong to this organization.");
+      if (currentUser.role !== "admin")
+        throw new Error("Only admin can remove members.");
+
+      const organization = await Organization.findById(orgId);
+      if (!organization) throw new Error("Organization not found.");
+
+      // Remove the member
+      organization.members = organization.members.filter(
+        (memberId) => memberId.toString() !== userId
+      );
+      await organization.save();
+
+      // Optionally, update the user's organizationId if it matches
+      const member = await User.findById(userId);
+      if (
+        member &&
+        member.organizationId &&
+        member.organizationId.toString() === orgId
+      ) {
+        member.organizationId = null;
+        await member.save();
+      }
+      return organization;
+    },
+    switchOrganization: async (_, { orgId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+
+      // Check if the user is a member of the organization
+      const organization = await Organization.findById(orgId);
+      if (!organization) throw new Error("Organization not found.");
+      if (
+        !organization.members.some(
+          (memberId) => memberId.toString() === req.userId
+        )
+      )
+        throw new Error("You are not a member of this organization.");
+
+      // Update user's primary organization
+      const user = await User.findById(req.userId);
+      user.organizationId = orgId;
+      await user.save();
+      return organization;
+    },
+
     createApiKey: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Generate a new random API key
@@ -315,15 +435,75 @@ module.exports = {
       await apiKey.save();
       return "API Key revoked successfully.";
     },
-    createApp: async (_, { name, description }, { req }) => {
+
+    addAppMember: async (_, { appId, memberEmail, role }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
+      // Verify that the requester owns the app or is allowed to add members
+      const app = await App.findOne({ _id: appId, owner: req.userId });
+      if (!app) throw new Error("App not found or not owned by you.");
+
+      // Find the user to add
+      const memberUser = await User.findOne({ email: memberEmail });
+      if (!memberUser) throw new Error("User not found.");
+
+      // Initialize members if undefined
+      if (!app.members) app.members = [];
+      // Check if the member is already added
+      const exists = app.members.some(
+        (m) => m.user.toString() === memberUser._id.toString()
+      );
+      if (exists) throw new Error("User is already a member of this app.");
+
+      app.members.push({ user: memberUser._id, role: role || "member" });
+      await app.save();
+      return app;
+    },
+
+    createApp: async (_, { name, description, orgId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+      // If orgId is provided, verify that the current user belongs to that organization
+      if (orgId) {
+        const org = await Organization.findById(orgId);
+        if (!org || !org.members.includes(req.userId)) {
+          throw new Error("Organization not found or you are not a member.");
+        }
+      }
       const newApp = await App.create({
         name,
         description,
         owner: req.userId,
+        organization: orgId || null,
       });
       return newApp;
     },
+    removeAppMember: async (_, { appId, userId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+      // Verify requester is the app owner
+      const app = await App.findOne({ _id: appId, owner: req.userId });
+      if (!app) throw new Error("App not found or not owned by you.");
+
+      if (!app.members) throw new Error("No members in the app.");
+
+      app.members = app.members.filter((m) => m.user.toString() !== userId);
+      await app.save();
+      return app;
+    },
+    updateAppMemberRole: async (_, { appId, userId, role }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+      // Verify requester is the app owner
+      const app = await App.findOne({ _id: appId, owner: req.userId });
+      if (!app) throw new Error("App not found or not owned by you.");
+
+      if (!app.members) throw new Error("No members in the app.");
+
+      const member = app.members.find((m) => m.user.toString() === userId);
+      if (!member) throw new Error("Member not found in this app.");
+
+      member.role = role;
+      await app.save();
+      return app;
+    },
+
     updateApp: async (_, { appId, name, description }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       const app = await App.findOne({ _id: appId, owner: req.userId });

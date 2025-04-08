@@ -7,7 +7,10 @@ const rateLimit = require("express-rate-limit");
 const typeDefs = require("./src/graphql/typeDefs");
 const cookieParser = require("cookie-parser");
 const resolvers = require("./src/graphql/resolvers");
-const allowedOrigin = "http://localhost:3000";
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://studio.apollographql.com",
+];
 const authMiddleware = require("./src/middleware/authMiddleware");
 const {
   loginLimiter,
@@ -21,7 +24,15 @@ const startServer = async () => {
 
   app.use(
     cors({
-      origin: allowedOrigin, // "http://localhost:3000"
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl requests, etc.)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          return callback(null, true);
+        } else {
+          return callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
     })
   );

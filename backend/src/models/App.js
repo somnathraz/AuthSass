@@ -1,11 +1,22 @@
-const { Schema, model } = require("mongoose");
+const mongoose = require("mongoose");
+const Schema = mongoose.Schema;
 
-const appSchema = new Schema({
-  name: { type: String, required: true },
-  owner: { type: Schema.Types.ObjectId, ref: "User", required: true },
-  description: { type: String },
-  createdAt: { type: Date, default: Date.now },
-  // You can add additional fields like callback URLs, branding info, etc.
+const AppMemberSchema = new Schema({
+  user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  role: { type: String, default: "member" }, // e.g., "member", "admin", etc.
 });
 
-module.exports = model("App", appSchema);
+const AppSchema = new Schema({
+  name: { type: String, required: true },
+  description: { type: String },
+  owner: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  organizationId: {
+    type: Schema.Types.ObjectId,
+    ref: "Organization",
+    required: true,
+  },
+  members: [AppMemberSchema],
+  createdAt: { type: Date, default: Date.now },
+});
+
+module.exports = mongoose.model("App", AppSchema);
