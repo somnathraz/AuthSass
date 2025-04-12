@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["node"], // Only include Node's types (add others as needed)
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,

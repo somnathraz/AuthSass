@@ -22,7 +22,7 @@ const App = require("../models/App");
 const Organization = require("../models/Organization");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const dummyPassword = process.env.DUMMY_PASSWORD;
+const dummyPassword = process.env.DUMMY_PASSWORD || "defaultDummyPassword123!";
 
 module.exports = {
   JSON: GraphQLJSON,
@@ -307,7 +307,7 @@ module.exports = {
       });
       // Set the refresh token as an HTTP-only cookie as well
 
-      await logEvent("SIGNUP", { email });
+      await logEvent("SOCIAL_LOGIN", user._id, { email });
       return { accessToken, refreshToken, user };
     },
     createOrganization: async (_, { name }, { req }) => {
