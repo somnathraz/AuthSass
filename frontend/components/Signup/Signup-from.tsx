@@ -92,7 +92,7 @@ export function SignupForm({
         client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
         callback: (response: { credential: string }) => {
           const googleIdToken = response.credential;
-          console.log(googleIdToken);
+          // console.log(googleIdToken);
           socialLogin("google", googleIdToken)
             .then((res) => {
               console.log("Google login successful:", res.data.socialLogin);
@@ -103,7 +103,7 @@ export function SignupForm({
                 email: userData.user.email,
                 image: userData.user.image,
               });
-              router.push("/");
+              router.push("/dashboard");
             })
             .catch((err) => {
               console.error("Google login error:", err);
