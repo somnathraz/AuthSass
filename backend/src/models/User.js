@@ -14,6 +14,9 @@ const UserSchema = new Schema({
   organizationId: { type: Schema.Types.ObjectId, ref: "Organization" },
   isVerified: { type: Boolean, default: false },
   verificationToken: { type: String },
+  passwordResetToken: { type: String, default: null },
+  passwordResetExpires: { type: Date, default: null },
+  requirePasswordReset: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 
