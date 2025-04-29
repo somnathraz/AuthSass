@@ -12,6 +12,15 @@ import {
   GET_MY_APPS,
   REQUEST_PASSWORD_RESET,
   RESET_PASSWORD_MUTATION,
+  ADD_APP_MEMBER,
+  INVITE_USER,
+  ADMIN_CREATE_USER,
+  ACCEPT_INVITE,
+  CHANGE_PASSWORD,
+  REMOVE_APP_MEMBER,
+  GET_INVITATIONS,
+  GET_MY_INVITATIONS,
+  CANCEL_INVITE,
 } from "../graphql/mutations";
 interface MeQuery {
   me: {
@@ -22,20 +31,7 @@ interface MeQuery {
     organizationId: string | null;
   };
 }
-interface MyAppsQuery {
-  myApps: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    createdAt: string;
-    owner: {
-      id: string;
-      username: string;
-      email: string;
-    };
-    // any other fields you need…
-  }>;
-}
+
 interface UserOrgsQuery {
   userOrganizations: Array<{
     id: string;
@@ -46,6 +42,71 @@ interface UserOrgsQuery {
     imageUrl?: string;
   }>;
 }
+
+interface AppData {
+  myApps: Array<{
+    id: string;
+    members: AppMember[];
+  }>;
+}
+interface AppVars {
+  orgId?: string;
+}
+
+// 2) Unified member shape
+export type MemberItem = {
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  status: "joined" | "pending";
+};
+type AppMember = {
+  user: { id: string; username: string; email: string };
+  role: string;
+};
+type MyAppsQuery = {
+  myApps: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    description?: string;
+    members: AppMember[];
+    owner: { id: string };
+  }>;
+};
+type MyAppsVars = { orgId: string };
+
+interface MyInvitationsQuery {
+  myInvitations: Array<{
+    id: string;
+    role: string;
+    createdAt: string;
+    app: {
+      id: string;
+      name: string;
+      description?: string;
+    };
+  }>;
+}
+export type FetchAppItem = {
+  id: string;
+  name: string;
+  description?: string;
+  role: string;
+  status: "joined" | "pending";
+  createdAt: string;
+};
+
+interface AppInvite {
+  id: string;
+  email: string;
+  role: string;
+}
+
+interface AppInvitesData {
+  invitations: AppInvite[];
+}
 // Create an app with name, description, orgId
 
 export const useLogin = () => {
@@ -55,7 +116,13 @@ export const useLogin = () => {
   };
   return { login, data, error, loading };
 };
-
+export const useChangePassword = () => {
+  const [changePasswordMutation, { loading, error }] =
+    useMutation(CHANGE_PASSWORD);
+  const changePassword = (newPassword: string) =>
+    changePasswordMutation({ variables: { newPassword } });
+  return { changePassword, loading, error };
+};
 export const useSignup = () => {
   const [signupMutation, { data, error, loading }] =
     useMutation(SIGNUP_MUTATION);
@@ -151,17 +218,182 @@ export const useCreateOrg = () => {
 };
 
 export function useFetchApp(orgId: string) {
-  const { data, loading, error, refetch } = useQuery<MyAppsQuery>(GET_MY_APPS, {
+  const {
+    data: appsData,
+    loading: appsLoading,
+    error: appsError,
+    refetch: refetchApps,
+  } = useQuery<MyAppsQuery, MyAppsVars>(GET_MY_APPS, {
     variables: { orgId },
   });
 
-  return {
-    apps: data?.myApps ?? [],
-    loading,
-    error,
-    refetch, // ← include refetch here
+  const {
+    data: invData,
+    loading: invLoading,
+    error: invError,
+    refetch: refetchInvites,
+  } = useQuery<MyInvitationsQuery>(GET_MY_INVITATIONS);
+
+  const joined = React.useMemo<FetchAppItem[]>(() => {
+    return (
+      appsData?.myApps.map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        role: a.members.find((m) => m.user.id !== a.owner.id)?.role ?? "owner",
+        status: "joined",
+        createdAt: a.createdAt,
+      })) ?? []
+    );
+  }, [appsData]);
+
+  const pending = React.useMemo<FetchAppItem[]>(() => {
+    return (
+      invData?.myInvitations.map((i) => ({
+        id: i.app.id,
+        name: i.app.name,
+        description: i.app.description,
+        role: i.role,
+        status: "pending",
+        createdAt: i.createdAt,
+      })) ?? []
+    );
+  }, [invData]);
+
+  const apps = React.useMemo(() => [...joined, ...pending], [joined, pending]);
+  const loading = appsLoading || invLoading;
+  const error = appsError || invError;
+  const refetch = () => {
+    refetchApps();
+    refetchInvites();
   };
+
+  return { apps, loading, error, refetch };
 }
+
+// export function useFetchApp(orgId: string) {
+//   const { data, loading, error, refetch } = useQuery<MyAppsQuery>(GET_MY_APPS, {
+//     variables: { orgId },
+//   });
+
+//   return {
+//     apps: data?.myApps ?? [],
+//     loading,
+//     error,
+//     refetch, // ← include refetch here
+//   };
+// }
+export function useAppMembers(appId: string, orgId?: string) {
+  // Fetch apps + their members
+  const {
+    data: appsData,
+    loading: appsLoading,
+    error: appsError,
+    refetch: refetchApps,
+  } = useQuery<AppData, AppVars>(GET_MY_APPS, { variables: { orgId } });
+
+  // Fetch pending invitations
+  // Build the "pending" list
+  const {
+    data: invitesData,
+    loading: invitesLoading,
+    error: invitesError,
+    refetch: refetchInvites,
+  } = useQuery<AppInvitesData, { appId: string }>(GET_INVITATIONS, {
+    variables: { appId },
+  });
+
+  // Build the "joined" list
+  const joined = React.useMemo<MemberItem[]>(() => {
+    const app = appsData?.myApps.find((a) => a.id === appId);
+    if (!app) return [];
+    return app.members.map((m) => ({
+      id: m.user.id,
+      email: m.user.email,
+      username: m.user.username,
+      role: m.role,
+      status: "joined",
+    }));
+  }, [appsData, appId]);
+
+  // 3) Build the pending list from AppInvite[], which has `email`:
+  const pending = React.useMemo<MemberItem[]>(() => {
+    return (
+      invitesData?.invitations.map((i) => ({
+        id: i.id,
+        email: i.email,
+        username: "", // not known yet
+        role: i.role,
+        status: "pending",
+      })) ?? []
+    );
+  }, [invitesData]);
+
+  const loading = appsLoading || invitesLoading;
+  const error = appsError || invitesError;
+  const refetch = () => {
+    refetchApps();
+    refetchInvites();
+  };
+
+  // Merge them
+  const members = React.useMemo<MemberItem[]>(
+    () => [...joined, ...pending],
+    [joined, pending]
+  );
+
+  return { members, loading, error, refetch };
+}
+
+export const useAddAppMember = () => {
+  const [addAppMemberMutation, { data, error, loading }] =
+    useMutation(ADD_APP_MEMBER);
+  const addAppMember = async (appId: string, email: string, role: string) => {
+    return await addAppMemberMutation({
+      variables: { appId, email, role },
+    });
+  };
+  return { addAppMember, data, error, loading };
+};
+export const useRemoveAppMember = () => {
+  const [removeMutation, { loading, error }] = useMutation(REMOVE_APP_MEMBER);
+  const removeAppMember = (appId: string, userId: string) =>
+    removeMutation({ variables: { appId, userId } });
+  return { removeAppMember, loading, error };
+};
+export const useInviteUser = () => {
+  const [inviteUserMutation, { data, error, loading }] =
+    useMutation(INVITE_USER);
+  const inviteUser = async (appId: string, email: string, role: string) => {
+    return await inviteUserMutation({
+      variables: { appId, email, role },
+    });
+  };
+  return { inviteUser, data, error, loading };
+};
+export const useCancelInvite = () => {
+  const [cancelMutation, { loading, error }] = useMutation(CANCEL_INVITE);
+  const cancelInvite = async (inviteId: string) => {
+    await cancelMutation({ variables: { inviteId } });
+  };
+  return { cancelInvite, loading, error };
+};
+export const useAcceptInvite = () => {
+  const [acceptInviteMutation, { data, error, loading }] =
+    useMutation(ACCEPT_INVITE);
+  const acceptInvite = (token: string, username: string, password: string) =>
+    acceptInviteMutation({
+      variables: { token, username, password },
+    });
+  return { acceptInvite, data, error, loading };
+};
+export const useAdminCreateUser = () => {
+  const [adminCreateUserMutation, { data, error, loading }] =
+    useMutation(ADMIN_CREATE_USER);
+  const adminCreateUser = (appId: string, email: string, role: string) =>
+    adminCreateUserMutation({ variables: { appId, email, role } });
+  return { adminCreateUser, data, error, loading };
+};
 export const useRequestPasswordReset = () => {
   const [mutate, { data, loading, error }] = useMutation(
     REQUEST_PASSWORD_RESET

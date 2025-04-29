@@ -11,7 +11,13 @@ export const LOGIN_MUTATION = gql`
         email
         role
       }
+      requirePasswordReset
     }
+  }
+`;
+export const CHANGE_PASSWORD = gql`
+  mutation ChangePassword($newPassword: String!) {
+    changePassword(newPassword: $newPassword)
   }
 `;
 
@@ -145,10 +151,30 @@ export const GET_MY_APPS = gql`
         user {
           id
           username
+          email
         }
         role
       }
     }
+  }
+`;
+export const GET_MY_INVITATIONS = gql`
+  query MyInvitations {
+    myInvitations {
+      id
+      role
+      createdAt
+      app {
+        id
+        name
+        description
+      }
+    }
+  }
+`;
+export const CANCEL_INVITE = gql`
+  mutation CancelInvitation($inviteId: ID!) {
+    cancelInvitation(inviteId: $inviteId)
   }
 `;
 export const CREATE_APP = gql`
@@ -156,6 +182,76 @@ export const CREATE_APP = gql`
     createApp(name: $name, description: $description, orgId: $orgId) {
       id
       name
+    }
+  }
+`;
+export const ADD_APP_MEMBER = gql`
+  mutation AddAppMember($appId: ID!, $email: String!, $role: String!) {
+    addAppMember(appId: $appId, email: $email, role: $role) {
+      id
+      members {
+        user {
+          id
+          username
+          email
+        }
+        role
+      }
+    }
+  }
+`;
+export const REMOVE_APP_MEMBER = gql`
+  mutation RemoveAppMember($appId: ID!, $userId: ID!) {
+    removeAppMember(appId: $appId, userId: $userId) {
+      id
+      members {
+        user {
+          id
+        }
+      }
+    }
+  }
+`;
+export const ACCEPT_INVITE = gql`
+  mutation AcceptInvite(
+    $token: String!
+    $username: String!
+    $password: String!
+  ) {
+    acceptInvite(token: $token, username: $username, password: $password) {
+      accessToken
+      refreshToken
+      user {
+        id
+        username
+        email
+      }
+    }
+  }
+`;
+export const INVITE_USER = gql`
+  mutation InviteUser($appId: ID!, $email: String!, $role: String!) {
+    inviteUser(appId: $appId, email: $email, role: $role) {
+      id
+      token
+    }
+  }
+`;
+export const GET_INVITATIONS = gql`
+  query Invitations($appId: ID!) {
+    invitations(appId: $appId) {
+      id
+      email
+      role
+    }
+  }
+`;
+export const ADMIN_CREATE_USER = gql`
+  mutation AdminCreateUser($appId: ID!, $email: String!, $role: String!) {
+    adminCreateUser(appId: $appId, email: $email, role: $role) {
+      id
+      email
+      requirePasswordReset
     }
   }
 `;

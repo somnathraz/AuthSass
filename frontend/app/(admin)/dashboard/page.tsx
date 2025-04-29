@@ -11,9 +11,9 @@ export default function Page() {
   const { user, organizations, loading, error } = useUserAndOrg();
   const params = useSearchParams();
   const selectedId = params.get("org") ?? organizations[0]?.id;
-  console.log("====================================");
-  console.log(user, organizations);
-  console.log("====================================");
+  // console.log("====================================");
+  // console.log(user, organizations);
+  // console.log("====================================");
   if (loading) {
     return <div>Loading your profile…</div>;
   }

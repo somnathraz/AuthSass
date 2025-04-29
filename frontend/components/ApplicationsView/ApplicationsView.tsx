@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreateAppModal } from "../CreateAppModal/CreateAppModal";
+import { Badge } from "@/components/ui/badge";
 
 export function ApplicationsView() {
   const params = useSearchParams();
@@ -35,7 +36,7 @@ export function ApplicationsView() {
       <h2 className="text-2xl font-bold mb-4">Applications</h2>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {/* “Create application” card now lives inside CreateAppModal */}
+        {/* “Create application” trigger */}
         <CreateAppModal
           trigger={
             <Card className="border-dashed border-2 border-gray-300 hover:border-gray-400 cursor-pointer">
@@ -48,33 +49,34 @@ export function ApplicationsView() {
           onCreated={() => refetch()}
         />
 
-        {/* if no apps */}
         {apps.length === 0 && (
           <div className="col-span-full text-center text-gray-500">
             No applications yet.
           </div>
         )}
 
-        {/* list your apps */}
         {apps.map((app) => (
           <Card
             key={app.id}
             className="flex flex-col h-48 cursor-pointer"
             onClick={() => router.push(`/dashboard/${orgId}/app/${app.id}`)}
           >
-            <CardHeader>
+            <CardHeader className="flex justify-between items-start">
               <CardTitle className="truncate">{app.name}</CardTitle>
+              <Badge
+                variant={app.status === "pending" ? "outline" : "secondary"}
+              >
+                {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+              </Badge>
             </CardHeader>
+
             <CardContent className="flex-1 text-sm text-muted-foreground">
               {app.description ?? <em>No description</em>}
             </CardContent>
+
             <CardFooter className="flex justify-between items-center">
               <span className="text-xs text-gray-400">
-                {new Date(
-                  typeof app.createdAt === "number"
-                    ? app.createdAt
-                    : Number(app.createdAt)
-                ).toLocaleDateString()}
+                {new Date(app.createdAt).toLocaleDateString()}
               </span>
               <Button
                 variant="link"

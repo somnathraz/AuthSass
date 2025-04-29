@@ -38,16 +38,24 @@ export function LoginForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({}); // reset previous errors
-
     try {
       const response = await login(email, password);
       console.log("Login successful:", response.data.login);
-      const userData = response.data.login;
+      const {
+        data: { login: result },
+      } = await login(email, password);
+      // console.log("Login successful:", result);
+      // Save tokens to localStorage or set in context
+      const { user, requirePasswordReset } = result;
+      if (requirePasswordReset) {
+        // you could stash the existing tokens in memory/localStorage if needed
+        return router.push("/change-password");
+      }
       setUser({
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        image: userData.image,
+        id: user.id,
+        name: user.username,
+        email: user.email,
+        image: user.image,
       });
       router.push("/dashboard");
     } catch (error: unknown) {
