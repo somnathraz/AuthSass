@@ -13,7 +13,7 @@ const comparePassword = async (password, hash) => {
 
 const generateAccessToken = (user) => {
   return jwt.sign(
-    { userId: user._id, email: user.email },
+    { userId: user._id, email: user.email, orgId: user.organizationId },
     process.env.JWT_SECRET,
     { expiresIn: "15m" } // short-lived access token
   );

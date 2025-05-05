@@ -68,22 +68,36 @@ module.exports = {
     myApps: async (_, { orgId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
-      let organizationField;
+      // Build the base filter
+      let filter;
       if (orgId === "personal" || !orgId) {
-        const me = await User.findById(req.userId);
-        organizationField = me.organizationId;
+        filter = {
+          $or: [{ owner: req.userId }, { "members.user": req.userId }],
+        };
       } else {
         const org = await Organization.findById(orgId);
         if (!org || !org.members.includes(req.userId)) {
           throw new Error("Organization not found or you are not a member.");
         }
-        organizationField = orgId;
+        filter = { organizationId: orgId };
       }
 
-      return await App.find({ organizationId: organizationField })
-        .populate("owner") // <— now owner is a full User doc
-        .populate("members.user"); // <— and each member.user is a full User doc
+      // Fetch and populate
+      const apps = await App.find(filter)
+        .populate("owner")
+        .populate("members.user");
+
+      // Filter out any member entries with a null user
+      apps.forEach((app) => {
+        if (Array.isArray(app.members)) {
+          app.members = app.members.filter((m) => m.user != null);
+        }
+      });
+
+      // Return the Mongoose documents directly (preserving `id` virtual)
+      return apps;
     },
+
     invitations: async (_, { appId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Optionally, check that req.userId is allowed to invite for this app
@@ -385,25 +399,31 @@ module.exports = {
     },
     // 2) Invitee hits link & submits their creds:
     acceptInvite: async (_, { token, username, password }, { req, res }) => {
-      const invite = await Invitation.findOne({ token });
-      if (!invite || invite.used || invite.expiresAt < new Date()) {
+      const invite = await Invitation.findOneAndUpdate(
+        { token, used: false, expiresAt: { $gt: new Date() } },
+        { $set: { used: true } },
+        { new: true }
+      );
+
+      if (!invite) {
         throw new Error("Invalid or expired invitation.");
       }
-
-      // Check if a User already exists with that email:
-      let user = await User.findOne({ email: invite.email });
+      const normalizedEmail = invite.email.toLowerCase();
+      let user = await User.findOne({ email: normalizedEmail });
+      console.log(user, normalizedEmail, "accept invite");
 
       if (!user) {
-        // a) create new user
         const passwordHash = await hashPassword(password);
         user = await User.create({
           username,
-          email: invite.email,
+          email: normalizedEmail,
           passwordHash,
           role: "user",
           accountType: "personal",
         });
       }
+      // Check if a User already exists with that email:
+
       // a) create new user (personal account)
       const passwordHash = await hashPassword(password);
       user = await User.create({

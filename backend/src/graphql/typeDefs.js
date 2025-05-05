@@ -13,6 +13,7 @@ module.exports = gql`
     requirePasswordReset: Boolean!
     createdAt: String!
   }
+
   type Invitation {
     id: ID!
     email: String!
@@ -84,6 +85,7 @@ module.exports = gql`
     me: User
     listUsers: [User!]!
     auditLogs(appId: ID!): [AuditLog!]!
+    allAuditLogs: [AuditLog!]!
     myApps(orgId: ID): [App!]!
     listApiKeys(appId: ID!): [ApiKey!]!
     allOrganizations: [Organization!]!
