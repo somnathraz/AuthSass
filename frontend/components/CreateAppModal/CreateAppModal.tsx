@@ -26,9 +26,10 @@ export function CreateAppModal({
   /** Called after a successful create so parent can refetch */
   onCreated: () => void;
 }) {
-  const params = useParams();
-  const raw = params.orgId;
-  const orgId = Array.isArray(raw) ? raw[0] : raw ?? "personal";
+  const params = useParams<{ orgId: string }>();
+  const rawOrg = params.orgId;
+  const orgId = Array.isArray(rawOrg) ? rawOrg[0] : rawOrg ?? "personal";
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -44,7 +45,6 @@ export function CreateAppModal({
     }
     setError(null);
 
-    // now only 2 args
     await createApp(name, description);
 
     if (!createError) {

@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useFetchApp } from "@/services/authService";
 import {
@@ -17,9 +17,8 @@ import { CreateAppModal } from "../CreateAppModal/CreateAppModal";
 import { Badge } from "@/components/ui/badge";
 
 export function ApplicationsView() {
-  const params = useSearchParams();
+  const { orgId } = useParams<{ orgId: string }>();
   const router = useRouter();
-  const orgId = params.get("org") ?? "personal";
 
   const { apps, loading, error, refetch } = useFetchApp(orgId);
 

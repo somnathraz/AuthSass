@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,24 +10,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, ChevronDown, Settings, LogOut } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useCreateOrg } from "@/services/authService";
+import { Settings, LogOut } from "lucide-react";
+// import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+// import { Input } from "@/components/ui/input";
+// import { Label } from "@/components/ui/label";
+// import { useCreateOrg } from "@/services/authService";
 
-interface Organization {
-  id: string;
-  name: string;
-  imageUrl?: string;
-}
+// interface Organization {
+//   id: string;
+//   name: string;
+//   imageUrl?: string;
+// }
 
 interface User {
   name: string;
@@ -38,28 +31,21 @@ interface User {
 interface NavbarProps {
   logoText: string;
   user: User;
-  currentOrg: Organization;
-  organizations: Organization[];
 }
 
-export function Navbar({
-  logoText,
-  user,
-  currentOrg,
-  organizations,
-}: NavbarProps) {
+export function Navbar({ logoText, user }: NavbarProps) {
   const router = useRouter();
 
   // Create Org modal state
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [orgName, setOrgName] = useState("");
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [isCreateOpen, setIsCreateOpen] = useState(false);
+  // const [orgName, setOrgName] = useState("");
+  // const [logoFile, setLogoFile] = useState<File | null>(null);
+  // const [error, setError] = useState<string | null>(null);
+  // const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const switchOrg = (org: Organization) => {
-    router.push(`/dashboard?org=${org.id}`);
-  };
+  // const switchOrg = (org: Organization) => {
+  //   router.push(`/dashboard?org=${org.id}`);
+  // };
   const goToAccount = () => {
     router.push("/account");
   };
@@ -68,38 +54,38 @@ export function Navbar({
     // now client‐side navigate to /login (or let the redirect do it)
     router.push("/login");
   };
-  const {
-    createOrg,
-    error: createError,
-    loading: createLoading,
-  } = useCreateOrg();
+  // const {
+  //   createOrg,
+  //   error: createError,
+  //   loading: createLoading,
+  // } = useCreateOrg();
 
-  const openCreate = () => {
-    setError(null);
-    setOrgName("");
-    setLogoFile(null);
-    setIsCreateOpen(true);
-  };
+  // const openCreate = () => {
+  //   setError(null);
+  //   setOrgName("");
+  //   setLogoFile(null);
+  //   setIsCreateOpen(true);
+  // };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orgName.trim()) {
-      setError("Organization name is required.");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      console.log("Creating organization:", { name: orgName, logo: logoFile });
-      // TODO: call your createOrganization mutation
-      await createOrg(orgName);
-      setIsCreateOpen(false);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to create organization.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  // const handleCreate = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   if (!orgName.trim()) {
+  //     setError("Organization name is required.");
+  //     return;
+  //   }
+  //   setIsSubmitting(true);
+  //   try {
+  //     console.log("Creating organization:", { name: orgName, logo: logoFile });
+  //     // TODO: call your createOrganization mutation
+  //     await createOrg(orgName);
+  //     setIsCreateOpen(false);
+  //   } catch (err) {
+  //     console.error(err);
+  //     setError("Failed to create organization.");
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
 
   return (
     <>
@@ -110,7 +96,7 @@ export function Navbar({
             {logoText}
           </Link>
 
-          <DropdownMenu>
+          {/* <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="flex items-center">
                 <Avatar className="mr-2 h-5 w-5">
@@ -161,7 +147,7 @@ export function Navbar({
                 Secured by SecureAuth
               </div>
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu> */}
         </div>
 
         {/* User menu */}
@@ -208,7 +194,7 @@ export function Navbar({
       </nav>
 
       {/* Create Organization Modal */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      {/* <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create organization</DialogTitle>
@@ -236,13 +222,13 @@ export function Navbar({
               />
             </div>
             {/* local “name required” error */}
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            {/* mutation error from the hook */}
-            {createError && (
+      {/* {error && <p className="text-sm text-red-600">{error}</p>} */}
+      {/* mutation error from the hook */}
+      {/* {createError && (
               <p className="text-sm text-red-600">{createError.message}</p>
-            )}
+            )} */}
 
-            <DialogFooter>
+      {/* <DialogFooter>
               <Button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
@@ -255,10 +241,10 @@ export function Navbar({
                   ? "Creating..."
                   : "Create organization"}
               </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter> */}
+      {/* </form> */}
+      {/* </DialogContent> */}
+      {/* </Dialog> */}
     </>
   );
 }

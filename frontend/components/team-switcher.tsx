@@ -2,8 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronsUpDown, Plus } from "lucide-react";
-
+import { ChevronsUpDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -11,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
 } from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
@@ -19,30 +17,29 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { CreateAppModal } from "./CreateAppModal/CreateAppModal";
 
-interface Team {
+export type Team = {
   id: string;
   name: string;
   logo: React.ElementType;
   plan?: string;
-}
+};
 
-interface TeamSwitcherProps {
+export interface TeamSwitcherProps {
   teams: Team[];
   activeId?: string;
   onSelect: (id: string) => void;
-  onAppCreated?: () => void; // ← now optional
+  /** if present, render this “create” button at the bottom of the list */
+  renderCreateItem?: () => React.ReactNode;
 }
 
 export function TeamSwitcher({
   teams,
   activeId,
   onSelect,
-  onAppCreated,
+  renderCreateItem,
 }: TeamSwitcherProps) {
   const { isMobile } = useSidebar();
-
   const initial = teams.find((t) => t.id === activeId) || teams[0] || null;
   const [activeTeam, setActiveTeam] = React.useState<Team | null>(initial);
 
@@ -57,7 +54,6 @@ export function TeamSwitcher({
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          {/* Trigger */}
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
@@ -76,7 +72,6 @@ export function TeamSwitcher({
             </SidebarMenuButton>
           </DropdownMenuTrigger>
 
-          {/* Menu Content */}
           <DropdownMenuContent
             align="start"
             side={isMobile ? "bottom" : "right"}
@@ -84,10 +79,10 @@ export function TeamSwitcher({
             className="min-w-[12rem] rounded-lg"
           >
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Applications
+              {renderCreateItem ? "Organizations" : "Applications"}
             </DropdownMenuLabel>
 
-            {teams.map((team, i) => (
+            {teams.map((team) => (
               <DropdownMenuItem
                 key={team.id}
                 onClick={() => {
@@ -100,27 +95,15 @@ export function TeamSwitcher({
                   <team.logo className="h-4 w-4" />
                   <span className="truncate text-sm">{team.name}</span>
                 </div>
-                <DropdownMenuShortcut>⌘{i + 1}</DropdownMenuShortcut>
               </DropdownMenuItem>
             ))}
 
-            <DropdownMenuSeparator />
-
-            {/* Replace your plain “Add application” item with the CreateAppModal trigger */}
-            <DropdownMenuItem asChild>
-              <CreateAppModal
-                trigger={
-                  <button className="flex items-center gap-2 p-2 w-full text-left">
-                    <Plus className="h-4 w-4" />
-                    <span className="text-sm">Add application</span>
-                  </button>
-                }
-                // wrap the optional callback in a no‑op when undefined:
-                onCreated={() => {
-                  if (onAppCreated) onAppCreated();
-                }}
-              />
-            </DropdownMenuItem>
+            {renderCreateItem && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2">{renderCreateItem()}</div>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

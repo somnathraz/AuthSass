@@ -1,12 +1,17 @@
 import React from "react";
-import { useMutation, useLazyQuery, useQuery } from "@apollo/client";
+
+import {
+  useMutation,
+  useLazyQuery,
+  useQuery,
+  ApolloError,
+} from "@apollo/client";
 import {
   CREATE_APP,
   FETCH_APP_LOGS,
   LOGIN_MUTATION,
   SIGNUP_MUTATION,
   SOCIAL_LOGIN_MUTATION,
-  GET_USER_ORGANIZATIONS,
   GET_ME,
   CREATE_ORGANIZATION,
   GET_MY_APPS,
@@ -21,6 +26,10 @@ import {
   GET_INVITATIONS,
   GET_MY_INVITATIONS,
   CANCEL_INVITE,
+  GET_USER_ORGANIZATIONS,
+  INVITE_ORG_MEMBER,
+  ACCEPT_ORG_INVITE,
+  REMOVE_ORGANIZATION_MEMBER,
 } from "../graphql/mutations";
 interface MeQuery {
   me: {
@@ -31,21 +40,19 @@ interface MeQuery {
     organizationId: string | null;
   };
 }
-
 interface UserOrgsQuery {
   userOrganizations: Array<{
     id: string;
     name: string;
-    owner: { id: string; username: string; email: string };
+    owner: { id: string };
     members: Array<{ id: string; username: string; email: string }>;
-    createdAt: string;
-    imageUrl?: string;
   }>;
 }
 
 interface AppData {
   myApps: Array<{
     id: string;
+    owner: { id: string; username: string; email: string };
     members: AppMember[];
   }>;
 }
@@ -88,6 +95,31 @@ interface MyInvitationsQuery {
       description?: string;
     };
   }>;
+}
+interface OrgMember {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+}
+interface AcceptOrgInviteResponse {
+  acceptOrganizationInvite: {
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      username: string;
+      email: string;
+    };
+    org: {
+      id: string;
+    };
+  };
+}
+interface AcceptOrgInviteVars {
+  token: string;
+  username?: string;
+  password?: string;
 }
 export type FetchAppItem = {
   id: string;
@@ -141,6 +173,85 @@ export const useSocialLogin = () => {
   };
   return { socialLogin, data, error, loading };
 };
+
+// 1) List current members of an org
+export function useOrgMembers(orgId: string) {
+  const { data, loading, error, refetch } = useQuery<UserOrgsQuery>(
+    GET_USER_ORGANIZATIONS
+  );
+  const org = data?.userOrganizations.find((o) => o.id === orgId);
+  const members: OrgMember[] =
+    org?.members.map((m) => ({
+      id: m.id,
+      username: m.username,
+      email: m.email,
+      role: m.id === org.owner.id ? "owner" : "member",
+    })) ?? [];
+
+  return { members, loading, error, refetch };
+}
+
+// 2) Send an “invite” email (creates a pending invitation)
+export function useInviteOrgMember() {
+  const [mutate, { loading, error }] = useMutation(INVITE_ORG_MEMBER, {
+    refetchQueries: ["GetUserOrganizations"],
+  });
+  const invite = (orgId: string, email: string, role = "member") =>
+    mutate({ variables: { orgId, email, role } });
+  return { invite, loading, error };
+}
+
+// 3) Accept an incoming org-invite token
+export function useAcceptOrgInvite(): {
+  accept: (
+    token: string,
+    username?: string,
+    password?: string
+  ) => Promise<AcceptOrgInviteResponse["acceptOrganizationInvite"]>;
+  loading: boolean;
+  error?: ApolloError;
+} {
+  const [mutate, { loading, error }] = useMutation<
+    AcceptOrgInviteResponse,
+    AcceptOrgInviteVars
+  >(ACCEPT_ORG_INVITE);
+
+  const accept = async (
+    token: string,
+    username?: string,
+    password?: string
+  ) => {
+    const { data } = await mutate({
+      variables: { token, username, password },
+    });
+    if (!data) {
+      throw new Error("No data returned from acceptOrganizationInvite");
+    }
+    return data.acceptOrganizationInvite;
+  };
+
+  return { accept, loading, error };
+}
+
+// 4) Add an existing user directly (owner / admin only)
+// export function useAddOrgMember() {
+//   const [mutate, { loading, error }] = useMutation(ADD_ORGANIZATION_MEMBER, {
+//     refetchQueries: ["GetUserOrganizations"],
+//   });
+//   const add = (orgId: string, email: string, role: string) =>
+//     mutate({ variables: { orgId, email, role } });
+//   return { add, loading, error };
+// }
+
+// 5) Remove a member (owner / admin only)
+export function useRemoveOrgMember() {
+  const [mutate, { loading, error }] = useMutation(REMOVE_ORGANIZATION_MEMBER, {
+    refetchQueries: ["GetUserOrganizations"],
+  });
+  const remove = (orgId: string, userId: string) =>
+    mutate({ variables: { orgId, userId } });
+  return { remove, loading, error };
+}
 
 export function useCreateApp(orgId: string) {
   const [createAppMutation, { data, loading, error }] = useMutation(
@@ -307,13 +418,26 @@ export function useAppMembers(appId: string, orgId?: string) {
   const joined = React.useMemo<MemberItem[]>(() => {
     const app = appsData?.myApps.find((a) => a.id === appId);
     if (!app) return [];
-    return app.members.map((m) => ({
+
+    // 1) The owner
+    const ownerRow: MemberItem = {
+      id: app.owner.id,
+      email: app.owner.email,
+      username: app.owner.username,
+      role: "owner", // you can choose whatever role label you like
+      status: "joined", // now this is correctly inferred as the literal "joined"
+    };
+
+    // 2) Everybody else
+    const memberRows: MemberItem[] = app.members.map((m) => ({
       id: m.user.id,
       email: m.user.email,
       username: m.user.username,
       role: m.role,
       status: "joined",
     }));
+
+    return [ownerRow, ...memberRows];
   }, [appsData, appId]);
 
   // 3) Build the pending list from AppInvite[], which has `email`:
@@ -378,7 +502,7 @@ export const useCancelInvite = () => {
   };
   return { cancelInvite, loading, error };
 };
-export const useAcceptInvite = () => {
+export function useAcceptInvite() {
   const [acceptInviteMutation, { data, error, loading }] =
     useMutation(ACCEPT_INVITE);
   const acceptInvite = (token: string, username: string, password: string) =>
@@ -386,7 +510,7 @@ export const useAcceptInvite = () => {
       variables: { token, username, password },
     });
   return { acceptInvite, data, error, loading };
-};
+}
 export const useAdminCreateUser = () => {
   const [adminCreateUserMutation, { data, error, loading }] =
     useMutation(ADMIN_CREATE_USER);

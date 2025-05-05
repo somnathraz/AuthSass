@@ -10,6 +10,7 @@ export const LOGIN_MUTATION = gql`
         username
         email
         role
+        organizationId
       }
       requirePasswordReset
     }
@@ -30,6 +31,7 @@ export const SIGNUP_MUTATION = gql`
         id
         username
         email
+        organizationId
       }
     }
   }
@@ -45,6 +47,7 @@ export const SOCIAL_LOGIN_MUTATION = gql`
         username
         email
         role
+        organizationId
       }
     }
   }
@@ -134,6 +137,75 @@ export const CREATE_ORGANIZATION = gql`
   }
 `;
 
+export const INVITE_ORG_MEMBER = gql`
+  mutation InviteOrganizationMember(
+    $orgId: ID!
+    $email: String!
+    $role: String!
+  ) {
+    inviteOrganizationMember(orgId: $orgId, email: $email, role: $role) {
+      id
+      email
+      orgId
+      role
+      token
+      expiresAt
+    }
+  }
+`;
+
+// 2) Accept an org invite (token → join the org)
+export const ACCEPT_ORG_INVITE = gql`
+  mutation AcceptOrganizationInvite(
+    $token: String!
+    $username: String
+    $password: String
+  ) {
+    acceptOrganizationInvite(
+      token: $token
+      username: $username
+      password: $password
+    ) {
+      accessToken
+      refreshToken
+      user {
+        id
+        username
+        email
+      }
+      org {
+        id
+        name
+      }
+    }
+  }
+`;
+
+// 3) Add an existing user directly (owner/admin only)
+// export const ADD_ORGANIZATION_MEMBER = gql`
+//   mutation AddOrganizationMember($orgId: ID!, $email: String!, $role: String!) {
+//     addOrganizationMember(orgId: $orgId, email: $email, role: $role) {
+//       id
+//       members {
+//         id
+//         username
+//         email
+//       }
+//     }
+//   }
+// `;
+
+// 4) Remove a member by userId (owner/admin only)
+export const REMOVE_ORGANIZATION_MEMBER = gql`
+  mutation RemoveOrganizationMember($orgId: ID!, $userId: ID!) {
+    removeOrganizationMember(orgId: $orgId, userId: $userId) {
+      id
+      members {
+        id
+      }
+    }
+  }
+`;
 export const GET_MY_APPS = gql`
   query GetMyApps($orgId: ID) {
     myApps(orgId: $orgId) {
@@ -224,11 +296,18 @@ export const ACCEPT_INVITE = gql`
       user {
         id
         username
-        email
+      }
+      invitation {
+        id
+        app {
+          id
+          organizationId
+        }
       }
     }
   }
 `;
+
 export const INVITE_USER = gql`
   mutation InviteUser($appId: ID!, $email: String!, $role: String!) {
     inviteUser(appId: $appId, email: $email, role: $role) {

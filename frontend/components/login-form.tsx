@@ -40,6 +40,7 @@ export function LoginForm({
     setErrors({}); // reset previous errors
     try {
       const response = await login(email, password);
+      const me = response.data.login.user;
       console.log("Login successful:", response.data.login);
       const {
         data: { login: result },
@@ -57,7 +58,7 @@ export function LoginForm({
         email: user.email,
         image: user.image,
       });
-      router.push("/dashboard");
+      router.push(`/dashboard/${me.organizationId}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         const errMsg = error.message;
@@ -106,7 +107,7 @@ export function LoginForm({
                 email: userData.user.email,
                 image: userData.image,
               });
-              router.push("/dashboard");
+              router.push(`/dashboard/${userData.user.organizationId}`);
             })
             .catch((err) => {
               console.error("Google login error:", err);

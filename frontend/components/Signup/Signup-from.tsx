@@ -43,6 +43,7 @@ export function SignupForm({
     setErrors({}); // Clear any previous errors
     try {
       const response = await signup(userName, email, password);
+      const me = response.data.login.user;
       // Use response.data.signup since your resolver returns that shape.
       const userData = response.data.signup;
       setUser({
@@ -52,7 +53,7 @@ export function SignupForm({
         image: userData.user.image,
       });
       console.log("Signup successful:", userData);
-      router.push("/");
+      router.push(`/dashboard/${me.organizationId}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         const errMsg = error.message;
@@ -103,7 +104,7 @@ export function SignupForm({
                 email: userData.user.email,
                 image: userData.user.image,
               });
-              router.push("/dashboard");
+              router.push(`/dashboard/${userData.user.organizationId}`);
             })
             .catch((err) => {
               console.error("Google login error:", err);

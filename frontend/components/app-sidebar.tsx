@@ -1,11 +1,11 @@
-// src/components/AppSidebar.tsx
 "use client";
 
 import * as React from "react";
-import { BookOpen, Bot, Settings2, SquareTerminal } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { BookOpen, Bot, Plus, Settings2, SquareTerminal } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import { TeamSwitcher } from "@/components/team-switcher";
+import { TeamSwitcher, Team } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -15,91 +15,160 @@ import {
 } from "@/components/ui/sidebar";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import { useFetchApp, useUserAndOrg } from "@/services/authService";
+import { CreateAppModal } from "@/components/CreateAppModal/CreateAppModal";
+import { CreateOrgModal } from "@/components/CreateOrgModal/CreateOrgModal";
 
-export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+export type NavItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  isActive: boolean;
+};
+
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  teamsOverride?: Team[];
+  navOverride?: NavItem[];
+}
+
+export function AppSidebar({
+  teamsOverride,
+  navOverride,
+  ...sidebarProps
+}: AppSidebarProps) {
   const params = useParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const orgIdRaw = params.orgId;
-  const appIdRaw = params.appId;
-  const orgId = Array.isArray(orgIdRaw) ? orgIdRaw[0] : orgIdRaw ?? "personal";
-  const appId = Array.isArray(appIdRaw) ? appIdRaw[0] : appIdRaw ?? "";
-  const { user, loading: userLoading, error: userError } = useUserAndOrg();
+  const rawOrg = params.orgId;
+  const rawApp = params.appId;
+  const orgId = Array.isArray(rawOrg) ? rawOrg[0] : rawOrg ?? "personal";
+  const appId = Array.isArray(rawApp) ? rawApp[0] : rawApp ?? "";
+
+  const {
+    user,
+    organizations,
+    loading: uLoading,
+    error: uError,
+  } = useUserAndOrg();
+
   const {
     apps,
-    loading: appsLoading,
-    error: appsError,
-    refetch,
+    loading: aLoading,
+    error: aError,
+    refetch: refetchApps,
   } = useFetchApp(orgId);
 
-  // Don't try to read user.username until it's loaded
-  if (userLoading) return <div>Loading…</div>;
-  if (userError || !user)
-    return <div className="text-red-600">Error loading user</div>;
+  const isOrgMode = !params.appId;
 
-  if (appsLoading) return <div>Loading apps…</div>;
-  if (appsError) return <div className="text-red-600">Error loading apps</div>;
-  const userProp = {
-    name: user.username,
-    email: user.email,
-    avatar: user.image || "/user.png",
-  };
-  const teams = apps.map((app) => ({
-    id: app.id,
-    name: app.name,
-    logo: SquareTerminal,
-    plan: "",
-  }));
+  if (uLoading) return <div>Loading user…</div>;
+  if (uError) return <div className="text-red-600">Error loading user</div>;
+  if (!user) return null;
 
-  const navMain = [
-    {
-      title: "Home",
-      url: `/dashboard/${orgId}${appId ? `/app/${appId}` : ""}`,
-      icon: SquareTerminal,
-      isActive:
-        pathname === `/dashboard/${orgId}` ||
-        pathname.startsWith(`/dashboard/${orgId}/app/`),
-    },
-    {
-      title: "Users",
-      url: `/dashboard/${orgId}/app/${appId}/users`,
-      icon: Bot,
-      isActive: pathname === `/dashboard/${orgId}/app/${appId}/users`,
-    },
-    {
-      title: "Logs",
-      url: `/dashboard/${orgId}/app/${appId}/users`,
-      icon: BookOpen,
-      isActive: pathname === `/dashboard/${orgId}/app/${appId}/logs`,
-    },
-    {
-      title: "Settings",
-      url: `/dashboard/${orgId}/app/${appId}/settings`,
-      icon: Settings2,
-      isActive: pathname === `/dashboard/${orgId}/app/${appId}/settings`,
-    },
-  ];
+  if (!isOrgMode && aLoading) return <div>Loading apps…</div>;
+  if (!isOrgMode && aError)
+    return <div className="text-red-600">Error loading apps</div>;
+
+  const teams: Team[] =
+    teamsOverride ??
+    (isOrgMode
+      ? organizations.map((o) => ({
+          id: o.id,
+          name: o.name,
+          logo: SquareTerminal,
+        }))
+      : apps.map((a) => ({ id: a.id, name: a.name, logo: SquareTerminal })));
+
+  const activeId = isOrgMode ? orgId : appId;
+
+  const onSelect = (newId: string) =>
+    isOrgMode
+      ? router.push(`/dashboard/${newId}`)
+      : router.push(`/dashboard/${orgId}/app/${newId}`);
+
+  const renderCreateItem = () =>
+    isOrgMode ? (
+      <CreateOrgModal
+        trigger={
+          <button className="flex w-full items-center gap-2 p-2 text-sm">
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            <span>Create organization</span>
+          </button>
+        }
+        onCreated={() => window.location.reload()}
+      />
+    ) : (
+      <CreateAppModal
+        trigger={
+          <button className="flex w-full items-center gap-2 p-2 text-sm">
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            <span>Create app</span>
+          </button>
+        }
+        onCreated={() => refetchApps()}
+      />
+    );
+
+  const navItems: NavItem[] =
+    navOverride ??
+    (isOrgMode
+      ? [
+          {
+            title: "My Apps",
+            url: `/dashboard/${orgId}`,
+            icon: SquareTerminal,
+            isActive: pathname === `/dashboard/${orgId}`,
+          },
+          {
+            title: "Account",
+            url: "/account",
+            icon: Settings2,
+            isActive: pathname === "/account",
+          },
+        ]
+      : [
+          {
+            title: "Users",
+            url: `/dashboard/${orgId}/app/${appId}/users`,
+            icon: Bot,
+            isActive: pathname.endsWith("/users"),
+          },
+          {
+            title: "Logs",
+            url: `/dashboard/${orgId}/app/${appId}/logs`,
+            icon: BookOpen,
+            isActive: pathname.endsWith("/logs"),
+          },
+          {
+            title: "Settings",
+            url: `/dashboard/${orgId}/app/${appId}/settings`,
+            icon: Settings2,
+            isActive: pathname.endsWith("/settings"),
+          },
+        ]);
 
   return (
-    <Sidebar collapsible="icon" {...props}>
+    <Sidebar collapsible="icon" {...sidebarProps}>
       <SidebarHeader>
         <TeamSwitcher
           teams={teams}
-          activeId={appId}
-          onSelect={(newAppId) =>
-            router.push(`/dashboard/${orgId}/app/${newAppId}`)
-          }
-          onAppCreated={() => refetch()}
+          activeId={activeId}
+          onSelect={onSelect}
+          renderCreateItem={renderCreateItem}
         />
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={navMain} />
+        <NavMain items={navItems} />
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={userProp} />
+        <NavUser
+          user={{
+            name: user.username,
+            email: user.email,
+            avatar: user.image || "/user.png",
+          }}
+        />
       </SidebarFooter>
 
       <SidebarRail />
