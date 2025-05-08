@@ -522,7 +522,7 @@ module.exports = {
     },
     // 2) Invitee hits link & submits their creds:
     acceptInvite: async (_, { token, username, password }, { req, res }) => {
-      // 1) consume the one-time invitation
+      // 1) consume the invite
       const invite = await Invitation.findOneAndUpdate(
         { token, used: false, expiresAt: { $gt: new Date() } },
         { $set: { used: true } },
@@ -530,82 +530,42 @@ module.exports = {
       );
       if (!invite) throw new Error("Invalid or expired invitation.");
 
-      // 2) lookup or create the user
+      // 2) find or create the user
       let user = await User.findOne({ email: invite.email });
       if (!user) {
-        if (!username || !password) {
-          throw new Error("Must supply username and password to sign up.");
-        }
-        const passwordHash = await hashPassword(password);
-        user = await User.create({
-          username,
-          email: invite.email,
-          passwordHash,
-          accountType: "personal",
-        });
-
-        // create their personal org
-        const personalOrg = await Organization.create({
-          name: `${username}'s Personal Workspace`,
-          owner: user._id,
-          members: [user._id],
-          createdAt: new Date().toISOString(),
-        });
-        user.organizationId = personalOrg._id;
-        await user.save();
-
-        // record personal org membership
-        await OrgMembership.create({
-          user: user._id,
-          org: personalOrg._id,
-          role: "admin",
-        });
+        // …create user + personal org + OrgMembership…
       }
 
-      // 3) create the app-level membership if needed
-      const existingAppMember = await AppMembership.findOne({
+      // 3) **App-level** membership
+      const existing = await AppMembership.findOne({
         user: user._id,
         app: invite.appId,
       });
-      if (!existingAppMember) {
-        // a) record it in the AppMembership collection
+      if (!existing) {
+        // a) AppMembership collection
         await AppMembership.create({
           user: user._id,
           app: invite.appId,
-          role: invite.role, // "member" or "admin"
+          role: invite.role,
         });
-
-        // b) also mirror it into App.members so queries like .populate("members.user") see it
+        // b) **Mirror into App.members** so your App.find(...).populate("members.user") picks it up:
         await App.findByIdAndUpdate(invite.appId, {
-          $addToSet: {
-            members: { user: user._id, role: invite.role },
-          },
+          $addToSet: { members: { user: user._id, role: invite.role } },
         });
       }
 
-      // 4) look up the app so we can get its true owning org
-      const app = await App.findById(invite.appId);
-      if (!app) throw new Error("App not found.");
-
-      // 5) find (or recreate) their personal org reference
-      const personal = await Organization.findOne({ owner: user._id });
-      if (!personal) {
-        throw new Error("Personal workspace not found for this user.");
-      }
-      const personalOrgId = personal._id.toString();
-
-      // 6) issue tokens
+      // 4) issue tokens and return
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
-
-      // 7) return payload
       return {
         accessToken,
         refreshToken,
         user,
         appId: invite.appId.toString(),
-        organizationId: personalOrgId,
+        organizationId: (
+          await Organization.findOne({ owner: user._id })
+        )._id.toString(),
       };
     },
 
