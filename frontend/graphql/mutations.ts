@@ -52,7 +52,6 @@ export const SOCIAL_LOGIN_MUTATION = gql`
     }
   }
 `;
-
 export const FETCH_USER_APP_LIST = gql`
   query MyApps {
     myApps {
@@ -63,7 +62,6 @@ export const FETCH_USER_APP_LIST = gql`
     }
   }
 `;
-
 export const FETCH_APP_LOGS = gql`
   query AuditLogs($appId: ID!) {
     auditLogs(appId: $appId) {
@@ -75,7 +73,6 @@ export const FETCH_APP_LOGS = gql`
     }
   }
 `;
-
 export const GET_ME = gql`
   query Me {
     me {
@@ -83,10 +80,10 @@ export const GET_ME = gql`
       username
       email
       organizationId
+      role
     }
   }
 `;
-
 export const GET_ORGANIZATION = gql`
   query GetOrganization {
     organization {
@@ -98,11 +95,15 @@ export const GET_ORGANIZATION = gql`
         email
       }
       members {
-        id
-        username
-        email
+        user {
+          id
+          username
+          email
+        }
+        role
       }
       createdAt
+      imageUrl
     }
   }
 `;
@@ -117,16 +118,37 @@ export const GET_USER_ORGANIZATIONS = gql`
         email
       }
       members {
-        id
-        username
-        email
+        user {
+          id
+          username
+          email
+        }
+        role
       }
       createdAt
       imageUrl
     }
   }
 `;
-
+export const GET_ORG_MEMBERS = gql`
+  query GetOrgMembers($orgId: ID!) {
+    orgMembers(orgId: $orgId) {
+      owner {
+        id
+        username
+        email
+      }
+      members {
+        user {
+          id
+          username
+          email
+        }
+        role
+      }
+    }
+  }
+`;
 export const CREATE_ORGANIZATION = gql`
   mutation CreateOrganization($name: String!) {
     createOrganization(name: $name) {
@@ -136,31 +158,23 @@ export const CREATE_ORGANIZATION = gql`
     }
   }
 `;
-
 export const INVITE_ORG_MEMBER = gql`
-  mutation InviteOrganizationMember(
-    $orgId: ID!
-    $email: String!
-    $role: String!
-  ) {
+  mutation ($orgId: ID!, $email: String!, $role: String!) {
     inviteOrganizationMember(orgId: $orgId, email: $email, role: $role) {
       id
       email
-      orgId
       role
-      token
       expiresAt
     }
   }
 `;
-
-// 2) Accept an org invite (token → join the org)
+export const CANCEL_ORG_INVITE = gql`
+  mutation ($inviteId: ID!) {
+    cancelOrgInvitation(inviteId: $inviteId)
+  }
+`;
 export const ACCEPT_ORG_INVITE = gql`
-  mutation AcceptOrganizationInvite(
-    $token: String!
-    $username: String
-    $password: String
-  ) {
+  mutation ($token: String!, $username: String, $password: String) {
     acceptOrganizationInvite(
       token: $token
       username: $username
@@ -170,39 +184,53 @@ export const ACCEPT_ORG_INVITE = gql`
       refreshToken
       user {
         id
-        username
         email
-      }
-      org {
-        id
-        name
+        organizationId
       }
     }
   }
 `;
-
-// 3) Add an existing user directly (owner/admin only)
-// export const ADD_ORGANIZATION_MEMBER = gql`
-//   mutation AddOrganizationMember($orgId: ID!, $email: String!, $role: String!) {
-//     addOrganizationMember(orgId: $orgId, email: $email, role: $role) {
-//       id
-//       members {
-//         id
-//         username
-//         email
-//       }
-//     }
-//   }
-// `;
-
+export const GET_ORG_INVITES = gql`
+  query ($orgId: ID!) {
+    orgInvitations(orgId: $orgId) {
+      id
+      email
+      role
+      createdAt
+      expiresAt
+    }
+  }
+`;
+export const GET_MY_ORG_INVITES = gql`
+  query GetMyOrgInvitations {
+    myOrgInvitations {
+      id
+      email
+      orgId
+      role
+      used
+      createdAt
+      expiresAt
+    }
+  }
+`;
+export const GET_MY_INVITES = gql`
+  query {
+    myOrgInvitations {
+      id
+      email
+      orgId
+      role
+      expiresAt
+      used
+    }
+  }
+`;
 // 4) Remove a member by userId (owner/admin only)
-export const REMOVE_ORGANIZATION_MEMBER = gql`
-  mutation RemoveOrganizationMember($orgId: ID!, $userId: ID!) {
+export const REMOVE_ORG_MEMBER = gql`
+  mutation RemoveOrgMember($orgId: ID!, $userId: ID!) {
     removeOrganizationMember(orgId: $orgId, userId: $userId) {
       id
-      members {
-        id
-      }
     }
   }
 `;
@@ -231,7 +259,7 @@ export const GET_MY_APPS = gql`
   }
 `;
 export const GET_MY_INVITATIONS = gql`
-  query MyInvitations {
+  query MyInvites {
     myInvitations {
       id
       role
@@ -296,14 +324,11 @@ export const ACCEPT_INVITE = gql`
       user {
         id
         username
+        email
+        organizationId
       }
-      invitation {
-        id
-        app {
-          id
-          organizationId
-        }
-      }
+      appId
+      organizationId
     }
   }
 `;

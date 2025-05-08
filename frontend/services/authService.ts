@@ -1,17 +1,12 @@
 import React from "react";
-
-import {
-  useMutation,
-  useLazyQuery,
-  useQuery,
-  ApolloError,
-} from "@apollo/client";
+import { useMutation, useLazyQuery, useQuery } from "@apollo/client";
 import {
   CREATE_APP,
   FETCH_APP_LOGS,
   LOGIN_MUTATION,
   SIGNUP_MUTATION,
   SOCIAL_LOGIN_MUTATION,
+  GET_USER_ORGANIZATIONS,
   GET_ME,
   CREATE_ORGANIZATION,
   GET_MY_APPS,
@@ -26,10 +21,13 @@ import {
   GET_INVITATIONS,
   GET_MY_INVITATIONS,
   CANCEL_INVITE,
-  GET_USER_ORGANIZATIONS,
   INVITE_ORG_MEMBER,
+  CANCEL_ORG_INVITE,
+  GET_ORG_INVITES,
+  GET_MY_ORG_INVITES,
   ACCEPT_ORG_INVITE,
-  REMOVE_ORGANIZATION_MEMBER,
+  GET_ORG_MEMBERS,
+  REMOVE_ORG_MEMBER,
 } from "../graphql/mutations";
 interface MeQuery {
   me: {
@@ -40,12 +38,18 @@ interface MeQuery {
     organizationId: string | null;
   };
 }
+
 interface UserOrgsQuery {
   userOrganizations: Array<{
     id: string;
     name: string;
-    owner: { id: string };
-    members: Array<{ id: string; username: string; email: string }>;
+    owner: { id: string; username: string; email: string };
+    members: Array<{
+      user: { id: string; username: string; email: string };
+      role: string;
+    }>;
+    createdAt: string;
+    imageUrl?: string;
   }>;
 }
 
@@ -82,7 +86,6 @@ type MyAppsQuery = {
     owner: { id: string };
   }>;
 };
-type MyAppsVars = { orgId: string };
 
 interface MyInvitationsQuery {
   myInvitations: Array<{
@@ -95,31 +98,6 @@ interface MyInvitationsQuery {
       description?: string;
     };
   }>;
-}
-interface OrgMember {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-}
-interface AcceptOrgInviteResponse {
-  acceptOrganizationInvite: {
-    accessToken: string;
-    refreshToken: string;
-    user: {
-      id: string;
-      username: string;
-      email: string;
-    };
-    org: {
-      id: string;
-    };
-  };
-}
-interface AcceptOrgInviteVars {
-  token: string;
-  username?: string;
-  password?: string;
 }
 export type FetchAppItem = {
   id: string;
@@ -139,7 +117,116 @@ interface AppInvite {
 interface AppInvitesData {
   invitations: AppInvite[];
 }
+interface InviteOrgMemberData {
+  inviteOrganizationMember: {
+    id: string;
+    email: string;
+    role: string;
+    token: string;
+    expiresAt: string;
+    createdAt: string;
+  };
+}
+interface InviteOrgMemberVars {
+  orgId: string;
+  email: string;
+  role: string;
+}
+interface CancelOrgInviteData {
+  cancelOrgInvitation: string;
+}
+interface CancelOrgInviteVars {
+  inviteId: string;
+}
+interface OrgInvitation {
+  id: string;
+  email: string;
+  role: string;
+  used: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+interface GetOrgInvitationsData {
+  orgInvitations: OrgInvitation[];
+}
+interface GetOrgInvitationsVars {
+  orgId: string;
+}
+interface GetOrgInvitationsVars {
+  orgId: string;
+}
+interface AcceptOrgInviteData {
+  acceptOrganizationInvite: {
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      username: string;
+      email: string;
+      organizationId: string;
+    };
+  };
+}
+interface AcceptOrgInviteVars {
+  token: string;
+  username?: string;
+  password?: string;
+}
+interface MyOrgInvitationsData {
+  myOrgInvitations: Array<OrgInvitation & { orgId: string }>;
+}
 // Create an app with name, description, orgId
+export interface OrgMember {
+  user: { id: string; username: string; email: string };
+  role: string;
+}
+interface RemoveOrgMemberVars {
+  orgId: string;
+  userId: string;
+}
+interface OrgMembersResponse {
+  orgMembers: {
+    owner: {
+      id: string;
+      username: string;
+      email: string;
+    };
+    members: Array<{
+      user: { id: string; username: string; email: string };
+      role: string;
+    }>;
+  };
+}
+
+interface MyAppsVars {
+  orgId: string;
+}
+
+//
+// 2) Define your acceptInvite mutation types
+//
+interface AcceptInviteData {
+  acceptInvite: {
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      username: string;
+      email: string;
+      organizationId: string;
+    };
+    appId: string;
+    organizationId: string;
+  };
+}
+interface AcceptInviteVars {
+  token: string;
+  username: string;
+  password: string;
+}
+interface MyAppsVars {
+  orgId: string;
+}
 
 export const useLogin = () => {
   const [loginMutation, { data, error, loading }] = useMutation(LOGIN_MUTATION);
@@ -173,85 +260,6 @@ export const useSocialLogin = () => {
   };
   return { socialLogin, data, error, loading };
 };
-
-// 1) List current members of an org
-export function useOrgMembers(orgId: string) {
-  const { data, loading, error, refetch } = useQuery<UserOrgsQuery>(
-    GET_USER_ORGANIZATIONS
-  );
-  const org = data?.userOrganizations.find((o) => o.id === orgId);
-  const members: OrgMember[] =
-    org?.members.map((m) => ({
-      id: m.id,
-      username: m.username,
-      email: m.email,
-      role: m.id === org.owner.id ? "owner" : "member",
-    })) ?? [];
-
-  return { members, loading, error, refetch };
-}
-
-// 2) Send an “invite” email (creates a pending invitation)
-export function useInviteOrgMember() {
-  const [mutate, { loading, error }] = useMutation(INVITE_ORG_MEMBER, {
-    refetchQueries: ["GetUserOrganizations"],
-  });
-  const invite = (orgId: string, email: string, role = "member") =>
-    mutate({ variables: { orgId, email, role } });
-  return { invite, loading, error };
-}
-
-// 3) Accept an incoming org-invite token
-export function useAcceptOrgInvite(): {
-  accept: (
-    token: string,
-    username?: string,
-    password?: string
-  ) => Promise<AcceptOrgInviteResponse["acceptOrganizationInvite"]>;
-  loading: boolean;
-  error?: ApolloError;
-} {
-  const [mutate, { loading, error }] = useMutation<
-    AcceptOrgInviteResponse,
-    AcceptOrgInviteVars
-  >(ACCEPT_ORG_INVITE);
-
-  const accept = async (
-    token: string,
-    username?: string,
-    password?: string
-  ) => {
-    const { data } = await mutate({
-      variables: { token, username, password },
-    });
-    if (!data) {
-      throw new Error("No data returned from acceptOrganizationInvite");
-    }
-    return data.acceptOrganizationInvite;
-  };
-
-  return { accept, loading, error };
-}
-
-// 4) Add an existing user directly (owner / admin only)
-// export function useAddOrgMember() {
-//   const [mutate, { loading, error }] = useMutation(ADD_ORGANIZATION_MEMBER, {
-//     refetchQueries: ["GetUserOrganizations"],
-//   });
-//   const add = (orgId: string, email: string, role: string) =>
-//     mutate({ variables: { orgId, email, role } });
-//   return { add, loading, error };
-// }
-
-// 5) Remove a member (owner / admin only)
-export function useRemoveOrgMember() {
-  const [mutate, { loading, error }] = useMutation(REMOVE_ORGANIZATION_MEMBER, {
-    refetchQueries: ["GetUserOrganizations"],
-  });
-  const remove = (orgId: string, userId: string) =>
-    mutate({ variables: { orgId, userId } });
-  return { remove, loading, error };
-}
 
 export function useCreateApp(orgId: string) {
   const [createAppMutation, { data, loading, error }] = useMutation(
@@ -327,7 +335,77 @@ export const useCreateOrg = () => {
     loading,
   };
 };
+export function useGetOrgMembers(orgId: string) {
+  const { data, loading, error, refetch } = useQuery<OrgMembersResponse>(
+    GET_ORG_MEMBERS,
+    { variables: { orgId } }
+  );
 
+  // pull out the flat list our page wants
+  const members = data
+    ? data.orgMembers.members.map((m) => ({
+        id: m.user.id,
+        username: m.user.username,
+        email: m.user.email,
+        role: m.role,
+      }))
+    : [];
+
+  const owner = data?.orgMembers.owner;
+
+  return { members, owner, loading, error, refetch };
+}
+export function useInviteOrganizationMember() {
+  const [mutate, { data, loading, error }] = useMutation<
+    InviteOrgMemberData,
+    InviteOrgMemberVars
+  >(INVITE_ORG_MEMBER);
+  const inviteOrgMember = (vars: InviteOrgMemberVars) =>
+    mutate({ variables: vars });
+  return { inviteOrgMember, data, loading, error };
+}
+export function useCancelOrgInvitation() {
+  const [mutate, { data, loading, error }] = useMutation<
+    CancelOrgInviteData,
+    CancelOrgInviteVars
+  >(CANCEL_ORG_INVITE);
+  const cancelOrgInvitation = (inviteId: string) =>
+    mutate({ variables: { inviteId } });
+  return { cancelOrgInvitation, data, loading, error };
+}
+export function useGetOrgInvitations(orgId: string) {
+  const { data, loading, error, refetch } = useQuery<
+    GetOrgInvitationsData,
+    GetOrgInvitationsVars
+  >(GET_ORG_INVITES, { variables: { orgId } });
+  return { invitations: data?.orgInvitations ?? [], loading, error, refetch };
+}
+export function useGetMyOrgInvitations() {
+  const { data, loading, error, refetch } =
+    useQuery<MyOrgInvitationsData>(GET_MY_ORG_INVITES);
+  return { invitations: data?.myOrgInvitations ?? [], loading, error, refetch };
+}
+export function useAcceptOrganizationInvite() {
+  const [mutate, { data, loading, error }] = useMutation<
+    AcceptOrgInviteData,
+    AcceptOrgInviteVars
+  >(ACCEPT_ORG_INVITE);
+  const acceptOrganizationInvite = (vars: AcceptOrgInviteVars) =>
+    mutate({ variables: vars });
+  return { acceptOrganizationInvite, data, loading, error };
+}
+export function useRemoveOrganizationMember() {
+  const [mutate, { loading, error }] = useMutation<
+    { removeOrganizationMember: { id: string } },
+    RemoveOrgMemberVars
+  >(REMOVE_ORG_MEMBER);
+  return {
+    remove: (orgId: string, userId: string) =>
+      mutate({ variables: { orgId, userId } }),
+    loading,
+    error,
+  };
+}
 export function useFetchApp(orgId: string) {
   const {
     data: appsData,
@@ -381,19 +459,6 @@ export function useFetchApp(orgId: string) {
 
   return { apps, loading, error, refetch };
 }
-
-// export function useFetchApp(orgId: string) {
-//   const { data, loading, error, refetch } = useQuery<MyAppsQuery>(GET_MY_APPS, {
-//     variables: { orgId },
-//   });
-
-//   return {
-//     apps: data?.myApps ?? [],
-//     loading,
-//     error,
-//     refetch, // ← include refetch here
-//   };
-// }
 export function useAppMembers(appId: string, orgId?: string) {
   // Fetch apps + their members
   const {
@@ -502,15 +567,44 @@ export const useCancelInvite = () => {
   };
   return { cancelInvite, loading, error };
 };
-export function useAcceptInvite() {
-  const [acceptInviteMutation, { data, error, loading }] =
-    useMutation(ACCEPT_INVITE);
+export const useAcceptInvite = () => {
+  const [acceptInviteMutation, { data, loading, error }] = useMutation<
+    AcceptInviteData,
+    AcceptInviteVars
+  >(ACCEPT_INVITE, {
+    // after the mutation completes, refetch both queries
+    awaitRefetchQueries: true,
+    refetchQueries: (mutationResult) => {
+      if (!mutationResult.data) return [];
+      const { appId, organizationId } = mutationResult.data.acceptInvite;
+
+      return [
+        // “joined” apps
+        {
+          query: GET_MY_APPS,
+          variables: { orgId: organizationId },
+        },
+        // “pending” invites
+        {
+          query: GET_INVITATIONS,
+          variables: { appId },
+        },
+      ];
+    },
+  });
+
   const acceptInvite = (token: string, username: string, password: string) =>
     acceptInviteMutation({
       variables: { token, username, password },
     });
-  return { acceptInvite, data, error, loading };
-}
+
+  return {
+    acceptInvite,
+    data,
+    loading,
+    error,
+  };
+};
 export const useAdminCreateUser = () => {
   const [adminCreateUserMutation, { data, error, loading }] =
     useMutation(ADMIN_CREATE_USER);

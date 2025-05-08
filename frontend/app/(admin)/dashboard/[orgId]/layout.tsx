@@ -2,25 +2,27 @@
 "use client";
 
 import React from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Navbar } from "@/components/accountNav/AccountNav";
 import { useUserAndOrg } from "@/services/authService";
 import { Settings2, SquareTerminal, User } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
+
 export default function DashboardOrgLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { orgId } = useParams<{ orgId: string }>();
+  const pathname = usePathname();
   const { user, organizations, loading, error } = useUserAndOrg();
 
   if (loading) return <div>Loading your profile…</div>;
   if (error) return <div className="text-red-600">Error: {error.message}</div>;
   if (!user) return <div className="text-gray-600">No user data.</div>;
 
-  // map user → Navbar props
+  // Nav props
   const userProp = {
     name: user.username,
     email: user.email,
@@ -34,31 +36,39 @@ export default function DashboardOrgLayout({
     plan: "",
   }));
 
-  // sidebar nav items for "org" level
   const orgNav = [
     {
       title: "My Apps",
       url: `/dashboard/${orgId}`,
       icon: SquareTerminal,
-      isActive: window.location.pathname === `/dashboard/${orgId}`,
+      isActive: pathname === `/dashboard/${orgId}`,
     },
     {
       title: "Users",
       url: `/dashboard/${orgId}/users`,
       icon: User,
-      isActive: window.location.pathname === `/dashboard/${orgId}/users`,
+      isActive: pathname === `/dashboard/${orgId}/users`,
     },
     {
       title: "Settings",
       url: `/dashboard/${orgId}/settings`,
       icon: Settings2,
-      isActive: window.location.pathname === `/dashboard/${orgId}/setting`,
+      isActive: pathname === `/dashboard/${orgId}/settings`,
     },
   ];
 
+  // detect if URL is an "app" page: e.g. /dashboard/:orgId/:appId or deeper
+  const segments = pathname.split("/").filter(Boolean);
+  // ["dashboard", orgId, ...rest]
+  const isAppPage =
+    segments.length >= 3 && !["users", "settings"].includes(segments[2]);
+
   return (
     <SidebarProvider>
-      <AppSidebar teamsOverride={teams} navOverride={orgNav} />
+      <AppSidebar
+        // only override teams/nav when *not* on an individual app page
+        {...(!isAppPage ? { teamsOverride: teams, navOverride: orgNav } : {})}
+      />
       <SidebarInset>
         <Navbar logoText="SA" user={userProp} />
         {children}

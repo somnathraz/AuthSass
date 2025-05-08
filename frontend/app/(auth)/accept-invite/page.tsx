@@ -21,10 +21,11 @@ export default function AcceptInvitePage() {
       alert("Please choose a username and password.");
       return;
     }
-    const { data } = await accept(token, username, password);
-    const { id: appId, organizationId } = data.acceptInvite.invitation.app;
-    // inv.app.organizationId and inv.app.id are now available
-    router.push(`/dashboard/${organizationId}/app/${appId}`);
+    const result = await accept(token, username, password);
+    if (result.data) {
+      const { appId, organizationId } = result.data.acceptInvite;
+      router.push(`/dashboard/${organizationId}/app/${appId}`);
+    }
   };
 
   return (

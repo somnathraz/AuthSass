@@ -1,34 +1,44 @@
 // src/app/accept-org-invite/page.tsx
 "use client";
+
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useAcceptOrgInvite } from "@/services/authService";
+import { useAcceptOrganizationInvite } from "@/services/authService";
 
 export default function AcceptOrgInvitePage() {
   const params = useSearchParams();
-  const token = params.get("token")!;
+  const token = params.get("token");
   const router = useRouter();
 
-  const { accept, loading, error } = useAcceptOrgInvite();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const { acceptOrganizationInvite, loading, error } =
+    useAcceptOrganizationInvite();
 
+  const [username, setUsername] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+
+  // Redirect if no token
   useEffect(() => {
     if (!token) router.replace("/login");
   }, [token, router]);
 
   const handleAccept = async () => {
+    if (!token) return;
     try {
-      const payload = await accept(
+      const result = await acceptOrganizationInvite({
         token,
-        username || undefined,
-        password || undefined
-      );
-      router.push(`/dashboard/${payload.org.id}`);
+        // only send username/password when provided
+        username: username || undefined,
+        password: password || undefined,
+      });
+
+      // result.data.acceptOrganizationInvite.user.organizationId
+      const orgId = result.data?.acceptOrganizationInvite.user.organizationId;
+      if (!orgId) throw new Error("Could not join organization.");
+
+      router.push(`/dashboard/${orgId}`);
     } catch (err: unknown) {
-      // Narrow `unknown` to something we can display
       const message =
         err instanceof Error
           ? err.message
@@ -38,6 +48,7 @@ export default function AcceptOrgInvitePage() {
       alert(message);
     }
   };
+
   return (
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-xl font-semibold mb-4">Accept Organization Invite</h1>
