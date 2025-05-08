@@ -20,6 +20,9 @@ const crypto = require("crypto");
 const ApiKey = require("../models/ApiKey");
 const App = require("../models/App");
 const Organization = require("../models/Organization");
+const OrgInvitation = require("../models/OrgInvitation");
+const OrgMembership = require("../models/OrgMembership");
+const AppMembership = require("../models/AppMembership");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const dummyPassword = process.env.DUMMY_PASSWORD || "defaultDummyPassword123!";
@@ -29,28 +32,76 @@ module.exports = {
   Query: {
     me: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
-      return await User.findById(req.userId);
+      const user = await User.findById(req.userId);
+      if (user.organizationId) {
+        // fetch their membership in that org
+        const membership = await OrgMembership.findOne({
+          user: user._id,
+          org: user.organizationId,
+        });
+        // override the returned role
+        user.role = membership?.role || user.role;
+      }
+      return user;
     },
     myInvitations: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // load your user to get their email
       const user = await User.findById(req.userId);
-      // find all outstanding invites sent to them
+
+      // find all outstanding invites sent to them, and populate the `appId` ref
       const invites = await Invitation.find({
         email: user.email,
         used: false,
-      }).sort({ createdAt: -1 });
+      })
+        .sort({ createdAt: -1 })
+        .populate("appId"); // ← populate here
 
-      // populate each invite.app field
-      return Promise.all(
-        invites.map(async (inv) => {
-          await inv.populate("appId"); // or a virtual field: inv.app = await App.findById(inv.appId)
-          return {
-            ...inv.toObject(),
-            app: inv.appId,
-          };
-        })
-      );
+      return invites.map((inv) => {
+        // inv.appId is now a full App document
+        const app = inv.appId;
+        return {
+          id: inv._id.toString(), // non-nullable ID
+          email: inv.email,
+          appId: app._id.toString(), // raw ID if you need it
+          role: inv.role,
+          token: inv.token,
+          used: inv.used,
+          createdAt: inv.createdAt.toISOString(),
+          expiresAt: inv.expiresAt.toISOString(),
+          app: {
+            id: app._id.toString(),
+            name: app.name,
+            description: app.description,
+            owner: app.owner, // or pick whichever fields you need
+            createdAt: app.createdAt.toISOString(),
+            // …any other App fields your SDL exposes…
+          },
+        };
+      });
+    },
+    orgInvitations: async (_, { orgId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+      // 1) ensure the org exists and you belong
+      const org = await Organization.findById(orgId);
+      if (!org) throw new Error("Organization not found.");
+      if (!org.members.includes(req.userId)) {
+        throw new Error("You’re not a member of that org.");
+      }
+
+      // 2) load the invites
+      const invites = await OrgInvitation.find({ orgId, used: false }).sort({
+        createdAt: -1,
+      });
+
+      // 3) map into the shape your schema expects (non-nullable fields)
+      return invites.map((inv) => ({
+        id: inv._id.toString(),
+        email: inv.email,
+        role: inv.role,
+        createdAt: inv.createdAt.toISOString(),
+        expiresAt: inv.expiresAt.toISOString(),
+      }));
     },
     listUsers: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
@@ -68,33 +119,47 @@ module.exports = {
     myApps: async (_, { orgId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
-      // Build the base filter
       let filter;
       if (orgId === "personal" || !orgId) {
+        // personal workspace: anything you own or are a member of
         filter = {
-          $or: [{ owner: req.userId }, { "members.user": req.userId }],
+          $or: [
+            { owner: req.userId },
+            { "members.user": req.userId }, // AppMembership
+          ],
         };
       } else {
+        // an org-scoped workspace
         const org = await Organization.findById(orgId);
-        if (!org || !org.members.includes(req.userId)) {
+        if (!org) throw new Error("Organization not found.");
+
+        const isOrgMember = org.members.includes(req.userId);
+        // also allow if they have an AppMembership *in* that org:
+        const invitedViaApp = await AppMembership.exists({
+          user: req.userId,
+          app: {
+            $in: await App.find({ organizationId: orgId }).distinct("_id"),
+          },
+        });
+
+        if (!isOrgMember && !invitedViaApp) {
           throw new Error("Organization not found or you are not a member.");
         }
+
         filter = { organizationId: orgId };
       }
 
-      // Fetch and populate
       const apps = await App.find(filter)
         .populate("owner")
         .populate("members.user");
 
-      // Filter out any member entries with a null user
+      // drop any stale member slots
       apps.forEach((app) => {
         if (Array.isArray(app.members)) {
           app.members = app.members.filter((m) => m.user != null);
         }
       });
 
-      // Return the Mongoose documents directly (preserving `id` virtual)
       return apps;
     },
 
@@ -105,7 +170,6 @@ module.exports = {
         createdAt: -1,
       });
     },
-
     listApiKeys: async (_, { appId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Optionally, verify that the app belongs to the user.
@@ -120,24 +184,80 @@ module.exports = {
       checkRole(currentUser, ["admin"]); // Only admin can view audit logs
       return await Organization.find({});
     },
+    orgMembers: async (_, { orgId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+
+      // 1) Load the org itself
+      const org = await Organization.findById(orgId);
+      if (!org) throw new Error("Organization not found.");
+      if (!org.members.includes(req.userId))
+        throw new Error("You’re not a member of that org.");
+
+      // 2) Fetch the owner once
+      const owner = await User.findById(org.owner);
+
+      // 3) Load all memberships for this org
+      const memberships = await OrgMembership.find({ org: orgId }).populate(
+        "user"
+      );
+
+      // 4) Filter out the owner from the membership list
+      const members = memberships
+        .filter((m) => m.user._id.toString() !== org.owner.toString())
+        .map((m) => ({
+          user: m.user,
+          role: m.role,
+        }));
+
+      // 5) Return one owner + the rest of the members
+      return { owner, members };
+    },
+
     userOrganizations: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
-      // Find all orgs where the current user is in `members`
-      // and populate both `owner` and `members` to full User docs.
-      return await Organization.find({ members: req.userId })
-        .populate("owner")
-        .populate("members");
+      // find all orgs this user belongs to
+      const orgs = await Organization.find({ members: req.userId }).populate(
+        "owner"
+      );
+
+      // for each org, fetch *its* membership rows
+      const results = await Promise.all(
+        orgs.map(async (org) => {
+          // <-- filter by org._id, not req.userId
+          const mems = await OrgMembership.find({ org: org._id }).populate(
+            "user"
+          );
+
+          return {
+            id: org._id.toString(),
+            name: org.name,
+            owner: org.owner,
+            createdAt: org.createdAt,
+            imageUrl: org.imageUrl,
+            members: mems.map((m) => ({
+              user: m.user,
+              role: m.role,
+            })),
+          };
+        })
+      );
+
+      return results;
     },
+
     // (optional) fetch only the org the user belongs to
-    organization: async (_, __, { req }) => {
-      if (!req.userId) throw new Error("Not authenticated!");
-      const user = await User.findById(req.userId);
-      if (!user.organizationId) return null;
-      return await Organization.findById(user.organizationId);
+  },
+  Organization: {
+    members: async (org) => {
+      // `org` is the Mongoose doc returned by find()
+      const mems = await OrgMembership.find({ org: org._id }).populate("user");
+      return mems.map((m) => ({
+        user: m.user,
+        role: m.role,
+      }));
     },
   },
-
   Mutation: {
     signup: async (_, { username, email, password }, { req, res }) => {
       const { error } = signupSchema.validate({ username, email, password });
@@ -166,7 +286,11 @@ module.exports = {
         owner: user._id,
         members: [user._id],
       });
-
+      await OrgMembership.create({
+        user: user._id,
+        org: organization._id,
+        role: "admin",
+      });
       // Update user with the created organization ID
       user.organizationId = organization._id;
       await user.save();
@@ -222,7 +346,6 @@ module.exports = {
       });
       return "Password reset email sent.";
     },
-
     login: async (_, { email, password }, { req, res }) => {
       // 1) Find user
       const user = await User.findOne({ email });
@@ -399,68 +522,93 @@ module.exports = {
     },
     // 2) Invitee hits link & submits their creds:
     acceptInvite: async (_, { token, username, password }, { req, res }) => {
+      // 1) consume the one-time invitation
       const invite = await Invitation.findOneAndUpdate(
         { token, used: false, expiresAt: { $gt: new Date() } },
         { $set: { used: true } },
         { new: true }
       );
+      if (!invite) throw new Error("Invalid or expired invitation.");
 
-      if (!invite) {
-        throw new Error("Invalid or expired invitation.");
-      }
-      const normalizedEmail = invite.email.toLowerCase();
-      let user = await User.findOne({ email: normalizedEmail });
-      console.log(user, normalizedEmail, "accept invite");
-
+      // 2) lookup or create the user
+      let user = await User.findOne({ email: invite.email });
       if (!user) {
+        if (!username || !password) {
+          throw new Error("Must supply username and password to sign up.");
+        }
         const passwordHash = await hashPassword(password);
         user = await User.create({
           username,
-          email: normalizedEmail,
+          email: invite.email,
           passwordHash,
-          role: "user",
           accountType: "personal",
         });
-      }
-      // Check if a User already exists with that email:
 
-      // a) create new user (personal account)
-      const passwordHash = await hashPassword(password);
-      user = await User.create({
-        username,
-        email: invite.email,
-        passwordHash,
-        role: "user",
-        accountType: "personal",
-      });
+        // create their personal org
+        const personalOrg = await Organization.create({
+          name: `${username}'s Personal Workspace`,
+          owner: user._id,
+          members: [user._id],
+          createdAt: new Date().toISOString(),
+        });
+        user.organizationId = personalOrg._id;
+        await user.save();
 
-      // b) create their personal organization
-      const personalOrg = await Organization.create({
-        name: `${user.username}'s Organization`,
-        owner: user._id,
-        members: [user._id],
-      });
-      user.organizationId = personalOrg._id;
-      await user.save();
-      // b) mark invitation used
-      invite.used = true;
-      await invite.save();
-
-      // c) attach user to the app if not already a member
-      const app = await App.findById(invite.appId).populate("members.user");
-      const alreadyMember = app.members.some((m) => m.user.id === user.id);
-      if (!alreadyMember) {
-        app.members.push({ user: user._id, role: invite.role });
-        await app.save();
+        // record personal org membership
+        await OrgMembership.create({
+          user: user._id,
+          org: personalOrg._id,
+          role: "admin",
+        });
       }
 
-      // d) issue tokens + cookies
+      // 3) create the app-level membership if needed
+      const existingAppMember = await AppMembership.findOne({
+        user: user._id,
+        app: invite.appId,
+      });
+      if (!existingAppMember) {
+        // a) record it in the AppMembership collection
+        await AppMembership.create({
+          user: user._id,
+          app: invite.appId,
+          role: invite.role, // "member" or "admin"
+        });
+
+        // b) also mirror it into App.members so queries like .populate("members.user") see it
+        await App.findByIdAndUpdate(invite.appId, {
+          $addToSet: {
+            members: { user: user._id, role: invite.role },
+          },
+        });
+      }
+
+      // 4) look up the app so we can get its true owning org
+      const app = await App.findById(invite.appId);
+      if (!app) throw new Error("App not found.");
+
+      // 5) find (or recreate) their personal org reference
+      const personal = await Organization.findOne({ owner: user._id });
+      if (!personal) {
+        throw new Error("Personal workspace not found for this user.");
+      }
+      const personalOrgId = personal._id.toString();
+
+      // 6) issue tokens
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
 
-      return { accessToken, refreshToken, user };
+      // 7) return payload
+      return {
+        accessToken,
+        refreshToken,
+        user,
+        appId: invite.appId.toString(),
+        organizationId: personalOrgId,
+      };
     },
+
     // For exchanging refreshToken -> new access token
     refreshToken: async (_, { refreshToken }, { req }) => {
       // If the refreshToken argument is missing, try reading it from the cookie
@@ -554,7 +702,11 @@ module.exports = {
           members: [user._id],
           createdAt: new Date().toISOString(),
         });
-
+        await OrgMembership.create({
+          user: user._id,
+          org: personalOrg._id,
+          role: "admin",
+        });
         // c) save it on the user
         user.organizationId = personalOrg._id;
         await user.save();
@@ -584,7 +736,6 @@ module.exports = {
       await logEvent("SOCIAL_LOGIN", user._id, { email });
       return { accessToken, refreshToken, user };
     },
-
     createOrganization: async (_, { name }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       const user = await User.findById(req.userId);
@@ -595,82 +746,213 @@ module.exports = {
         members: [req.userId],
         createdAt: new Date().toISOString(),
       });
+      await OrgMembership.create({
+        user: req.userId,
+        org: organization._id,
+        role: "admin",
+      });
       // Optionally, update the user's organization reference
       user.organization = organization.id;
       await user.save();
+
       return organization;
     },
-    addOrganizationMember: async (_, { orgId, memberEmail, role }, { req }) => {
+    inviteOrganizationMember: async (_, { orgId, email, role }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
-
-      // Verify the requester is admin in the organization
-      const currentUser = await User.findById(req.userId);
-      if (
-        !currentUser.organizationId ||
-        currentUser.organizationId.toString() !== orgId
-      )
-        throw new Error("You do not belong to this organization.");
-      if (currentUser.role !== "admin")
-        throw new Error("Only admin can add members.");
-
-      // Find the user to add
-      const memberUser = await User.findOne({ email: memberEmail });
-      if (!memberUser) throw new Error("User not found.");
-
-      const organization = await Organization.findById(orgId);
-      if (!organization) throw new Error("Organization not found.");
-
-      // Check if the user is already a member
-      if (organization.members.includes(memberUser._id))
-        throw new Error("User is already a member.");
-
-      organization.members.push(memberUser._id);
-      await organization.save();
-
-      // Optionally, update the user's organizationId if they don't have one
-      if (!memberUser.organizationId) {
-        memberUser.organizationId = orgId;
-        // Optionally, update the user's role if needed
-        memberUser.role = role || "member";
-        await memberUser.save();
+      // 1) verify req.userId is admin of orgId
+      const org = await Organization.findById(orgId);
+      if (!org || org.owner.toString() !== req.userId)
+        throw new Error("Only the org owner can invite.");
+      const invitee = await User.findOne({ email });
+      if (invitee) {
+        const existing = await OrgMembership.findOne({
+          user: invitee._id,
+          org: orgId,
+        });
+        if (existing)
+          throw new Error("This user is already in the organization");
       }
-      return organization;
-    },
+      // 2) create invite
+      const token = crypto.randomBytes(24).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 3600 * 1000); // 48h
+      const invite = await OrgInvitation.create({
+        email: email.toLowerCase(),
+        orgId,
+        role,
+        token,
+        expiresAt,
+      });
 
+      // 3) send email
+      const link = `${process.env.FRONTEND_URL}/accept-org?token=${token}`;
+      await sendEmail(
+        email,
+        "You’ve been invited to join our organization!",
+        `Click to accept: ${link}\n\nExpires in 48h.`
+      );
+
+      return invite;
+    },
+    cancelOrgInvitation: async (_, { inviteId }, { req }) => {
+      if (!req.userId) throw new Error("Not authenticated!");
+      const invite = await OrgInvitation.findById(inviteId);
+      if (!invite) throw new Error("Not found.");
+      // only owner or same org admin can cancel
+      const org = await Organization.findById(invite.orgId);
+      if (org.owner.toString() !== req.userId) throw new Error("Not allowed.");
+      await invite.remove();
+      return "Cancelled";
+    },
+    acceptOrganizationInvite: async (
+      _,
+      { token, username, password },
+      { req, res }
+    ) => {
+      // 1) consume the invite
+      const invite = await OrgInvitation.findOneAndUpdate(
+        { token, used: false, expiresAt: { $gt: new Date() } },
+        { $set: { used: true } },
+        { new: true }
+      );
+      if (!invite) throw new Error("Invalid or expired invite token.");
+
+      // 2) lookup or create the user
+      let user = await User.findOne({ email: invite.email });
+      if (!user) {
+        if (!username || !password) {
+          throw new Error("Must supply username and password to register.");
+        }
+        const passwordHash = await hashPassword(password);
+        user = await User.create({
+          username,
+          email: invite.email,
+          passwordHash,
+          accountType: "personal",
+          // you can set a default role here if you like
+        });
+
+        // create their personal org
+        const personal = await Organization.create({
+          name: `${username}'s Organization`,
+          owner: user._id,
+          members: [user._id],
+          createdAt: new Date().toISOString(),
+        });
+
+        user.organizationId = personal._id;
+        await user.save();
+
+        // record membership
+        await OrgMembership.create({
+          user: user._id,
+          org: personal._id,
+          role: "admin",
+        });
+      }
+
+      // 3) scoped org‐invite membership
+      const existing = await OrgMembership.findOne({
+        user: user._id,
+        org: invite.orgId,
+      });
+      if (!existing) {
+        await OrgMembership.create({
+          user: user._id,
+          org: invite.orgId,
+          role: invite.role,
+        });
+
+        // ←─── ensure the Organization.members array includes them ────→
+        await Organization.findByIdAndUpdate(invite.orgId, {
+          $addToSet: { members: user._id },
+        });
+      }
+
+      // 4) switch their “current” org to the invited one
+      user.organizationId = invite.orgId;
+      await user.save();
+
+      // 5) issue tokens & set cookies
+      const { accessToken, refreshToken } = await generateTokens(user);
+      res.cookie("token", accessToken, { httpOnly: true, path: "/" });
+      res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
+
+      return {
+        accessToken,
+        refreshToken,
+        user,
+      };
+    },
     removeOrganizationMember: async (_, { orgId, userId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
-      // Ensure the requester is an admin of the organization
-      const currentUser = await User.findById(req.userId);
-      if (
-        !currentUser.organizationId ||
-        currentUser.organizationId.toString() !== orgId
-      )
-        throw new Error("You do not belong to this organization.");
-      if (currentUser.role !== "admin")
-        throw new Error("Only admin can remove members.");
+      // 1) You can’t remove yourself
+      if (userId === req.userId) {
+        throw new Error("You cannot remove yourself from the organization.");
+      }
 
+      // 2) Verify the caller is an admin of this org
+      const callerMembership = await OrgMembership.findOne({
+        user: req.userId,
+        org: orgId,
+      });
+      if (!callerMembership || callerMembership.role !== "admin") {
+        throw new Error("Only org admins can remove members.");
+      }
+
+      // 3) Fetch the target’s membership to see their role
+      const targetMembership = await OrgMembership.findOne({
+        user: userId,
+        org: orgId,
+      });
+      if (!targetMembership) {
+        throw new Error("That user is not a member of this organization.");
+      }
+
+      // 4) If they’re an admin, make sure there is at least one other admin
+      if (targetMembership.role === "admin") {
+        const adminCount = await OrgMembership.countDocuments({
+          org: orgId,
+          role: "admin",
+        });
+        if (adminCount <= 1) {
+          throw new Error(
+            "Cannot remove the last admin — there must be at least one."
+          );
+        }
+      }
+
+      // 5) Now, proceed with removal...
       const organization = await Organization.findById(orgId);
       if (!organization) throw new Error("Organization not found.");
 
-      // Remove the member
+      // • remove from the org.members array
       organization.members = organization.members.filter(
-        (memberId) => memberId.toString() !== userId
+        (m) => m.toString() !== userId
       );
       await organization.save();
 
-      // Optionally, update the user's organizationId if it matches
-      const member = await User.findById(userId);
-      if (
-        member &&
-        member.organizationId &&
-        member.organizationId.toString() === orgId
-      ) {
-        member.organizationId = null;
-        await member.save();
+      // • delete their membership record
+      await OrgMembership.deleteOne({ user: userId, org: orgId });
+
+      // • delete any pending invites for their email
+      const memberUser = await User.findById(userId);
+      if (memberUser?.email) {
+        await OrgInvitation.deleteMany({
+          orgId,
+          email: memberUser.email.toLowerCase(),
+        });
       }
+
+      // • if this was their current org, clear it
+      if (memberUser && memberUser.organizationId?.toString() === orgId) {
+        memberUser.organizationId = null;
+        await memberUser.save();
+      }
+
       return organization;
     },
+
     switchOrganization: async (_, { orgId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
@@ -690,7 +972,6 @@ module.exports = {
       await user.save();
       return organization;
     },
-
     createApiKey: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Generate a new random API key
@@ -710,7 +991,6 @@ module.exports = {
       await apiKey.save();
       return "API Key revoked successfully.";
     },
-
     addAppMember: async (_, { appId, memberEmail, role }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Verify that the requester owns the app or is allowed to add members
@@ -733,24 +1013,6 @@ module.exports = {
       await app.save();
       return app;
     },
-
-    // createApp: async (_, { name, description, orgId }, { req }) => {
-    //   if (!req.userId) throw new Error("Not authenticated!");
-    //   // If orgId is provided, verify that the current user belongs to that organization
-    //   if (orgId) {
-    //     const org = await Organization.findById(orgId);
-    //     if (!org || !org.members.includes(req.userId)) {
-    //       throw new Error("Organization not found or you are not a member.");
-    //     }
-    //   }
-    //   const newApp = await App.create({
-    //     name,
-    //     description,
-    //     owner: req.userId,
-    //     organization: orgId || null,
-    //   });
-    //   return newApp;
-    // },
     createApp: async (_, { name, description, orgId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
@@ -783,7 +1045,11 @@ module.exports = {
         organizationId: organizationField, // <— note the property name
         createdAt: new Date().toISOString(),
       });
-
+      await AppMembership.create({
+        user: req.userId,
+        app: newApp._id,
+        role: "owner",
+      });
       return newApp;
     },
     removeAppMember: async (_, { appId, userId }, { req }) => {
@@ -813,7 +1079,6 @@ module.exports = {
       await app.save();
       return app;
     },
-
     updateApp: async (_, { appId, name, description }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       const app = await App.findOne({ _id: appId, owner: req.userId });

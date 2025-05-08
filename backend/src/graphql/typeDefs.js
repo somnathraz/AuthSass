@@ -13,7 +13,16 @@ module.exports = gql`
     requirePasswordReset: Boolean!
     createdAt: String!
   }
-
+  type OrgInvitation {
+    id: ID!
+    email: String!
+    orgId: ID!
+    role: String!
+    token: String!
+    used: Boolean!
+    createdAt: String!
+    expiresAt: String!
+  }
   type Invitation {
     id: ID!
     email: String!
@@ -29,7 +38,7 @@ module.exports = gql`
     id: ID!
     name: String!
     owner: User!
-    members: [User!]!
+    members: [OrgMember!]!
     createdAt: String!
     imageUrl: String
   }
@@ -72,6 +81,15 @@ module.exports = gql`
     refreshToken: String!
     user: User!
   }
+  type OrgMember {
+    user: User!
+    role: String!
+  }
+
+  type OrgMemberResponse {
+    owner: User!
+    members: [OrgMember!]!
+  }
 
   type AuditLog {
     id: ID!
@@ -79,6 +97,13 @@ module.exports = gql`
     userId: ID
     metadata: JSON
     timestamp: String!
+  }
+  type AcceptInvitePayload {
+    accessToken: String!
+    refreshToken: String!
+    user: User!
+    appId: ID!
+    organizationId: ID!
   }
 
   type Query {
@@ -90,8 +115,11 @@ module.exports = gql`
     listApiKeys(appId: ID!): [ApiKey!]!
     allOrganizations: [Organization!]!
     userOrganizations: [Organization!]!
+    orgMembers(orgId: ID!): OrgMemberResponse!
     invitations(appId: ID!): [Invitation!]!
     myInvitations: [Invitation!]!
+    orgInvitations(orgId: ID!): [OrgInvitation!]!
+    myOrgInvitations: [OrgInvitation!]!
     organization: Organization # fetch the organization of the logged in user
   }
 
@@ -109,7 +137,7 @@ module.exports = gql`
       token: String!
       username: String!
       password: String!
-    ): AuthPayload!
+    ): AcceptInvitePayload!
     refreshToken(refreshToken: String!): RefreshResponse!
     verifyEmail(token: String!): String
     requestPasswordReset(email: String!): String
@@ -121,12 +149,18 @@ module.exports = gql`
     deleteUser(userId: ID!): String!
     socialLogin(provider: String!, token: String!): AuthPayload!
     createOrganization(name: String!): Organization!
-    addOrganizationMember(
+    removeOrganizationMember(orgId: ID!, userId: ID!): Organization!
+    inviteOrganizationMember(
       orgId: ID!
       email: String!
       role: String!
-    ): Organization!
-    removeOrganizationMember(orgId: ID!, userId: ID!): Organization!
+    ): OrgInvitation!
+    cancelOrgInvitation(inviteId: ID!): String!
+    acceptOrganizationInvite(
+      token: String!
+      username: String
+      password: String
+    ): AuthPayload!
     switchOrganization(orgId: ID!): Organization!
     createApp(name: String!, description: String, orgId: ID!): App!
     updateApp(appId: ID!, name: String, description: String): App!
