@@ -112,6 +112,7 @@ export const GET_USER_ORGANIZATIONS = gql`
     userOrganizations {
       id
       name
+      type
       owner {
         id
         username
@@ -174,7 +175,11 @@ export const CANCEL_ORG_INVITE = gql`
   }
 `;
 export const ACCEPT_ORG_INVITE = gql`
-  mutation ($token: String!, $username: String, $password: String) {
+  mutation AcceptOrganizationInvite(
+    $token: String!
+    $username: String # optional now
+    $password: String # optional now
+  ) {
     acceptOrganizationInvite(
       token: $token
       username: $username
@@ -184,6 +189,7 @@ export const ACCEPT_ORG_INVITE = gql`
       refreshToken
       user {
         id
+        username
         email
         organizationId
       }
@@ -263,6 +269,7 @@ export const GET_MY_INVITATIONS = gql`
     myInvitations {
       id
       role
+      used # ← add this
       createdAt
       app {
         id
@@ -315,8 +322,8 @@ export const REMOVE_APP_MEMBER = gql`
 export const ACCEPT_INVITE = gql`
   mutation AcceptInvite(
     $token: String!
-    $username: String!
-    $password: String!
+    $username: String # optional now
+    $password: String # optional now
   ) {
     acceptInvite(token: $token, username: $username, password: $password) {
       accessToken
@@ -347,6 +354,8 @@ export const GET_INVITATIONS = gql`
       id
       email
       role
+      used
+      expiresAt
     }
   }
 `;

@@ -8,12 +8,14 @@ import { Navbar } from "@/components/accountNav/AccountNav";
 import { useUserAndOrg } from "@/services/authService";
 import { Settings2, SquareTerminal, User } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { useOrgAccessGuard } from "@/hooks/useOrgAccessGuard";
 
 export default function DashboardOrgLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  useOrgAccessGuard();
   const { orgId } = useParams<{ orgId: string }>();
   const pathname = usePathname();
   const { user, organizations, loading, error } = useUserAndOrg();

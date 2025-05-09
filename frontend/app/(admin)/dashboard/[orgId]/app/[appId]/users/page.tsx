@@ -31,6 +31,7 @@ export default function UsersPage() {
     await cancelInvite(inviteId);
     refetch();
   };
+
   if (loading) return <div>Loading users…</div>;
   if (error) return <div className="text-red-500">Error loading users.</div>;
 
@@ -85,35 +86,39 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {members.map(({ id, email, username, role, status }) => (
-              <tr key={id} className="border-t">
-                <td className="px-4 py-2">{username || <em>—</em>}</td>
-                <td className="px-4 py-2">{email}</td>
-                <td className="px-4 py-2">{role}</td>
-                <td
-                  className={`
+            {members.map(({ id, email, username, role, status }) => {
+              console.log(id, email, username, role, status);
+
+              return (
+                <tr key={id} className="border-t">
+                  <td className="px-4 py-2">{username || <em>—</em>}</td>
+                  <td className="px-4 py-2">{email}</td>
+                  <td className="px-4 py-2">{role}</td>
+                  <td
+                    className={`
           px-4 py-2
           ${status === "joined" ? "text-green-600" : "text-yellow-600"}
         `}
-                >
-                  {status === "joined" ? "Joined" : "Pending"}
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={removing || cancelling}
-                    onClick={() =>
-                      status === "joined"
-                        ? handleRemove(id)
-                        : handleCancelInvite(id)
-                    }
                   >
-                    <Trash className="h-4 w-4 text-red-500" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
+                    {status === "joined" ? "Joined" : "Pending"}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={removing || cancelling}
+                      onClick={() =>
+                        status === "joined"
+                          ? handleRemove(id)
+                          : handleCancelInvite(id)
+                      }
+                    >
+                      <Trash className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : (

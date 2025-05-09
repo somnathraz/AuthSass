@@ -14,12 +14,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useAppAccessGuard } from "@/hooks/useAppAccessGuard";
 
 export default function DashboardAppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  useAppAccessGuard();
   return (
     <SidebarProvider>
       {/* <AppSidebar /> */}

@@ -43,6 +43,7 @@ interface UserOrgsQuery {
   userOrganizations: Array<{
     id: string;
     name: string;
+    type: string;
     owner: { id: string; username: string; email: string };
     members: Array<{
       user: { id: string; username: string; email: string };
@@ -92,6 +93,7 @@ interface MyInvitationsQuery {
     id: string;
     role: string;
     createdAt: string;
+    used: boolean;
     app: {
       id: string;
       name: string;
@@ -106,12 +108,14 @@ export type FetchAppItem = {
   role: string;
   status: "joined" | "pending";
   createdAt: string;
+  used: boolean; // ← this is required
 };
-
 interface AppInvite {
   id: string;
   email: string;
   role: string;
+  used: boolean;
+  expiresAt: string;
 }
 
 interface AppInvitesData {
@@ -431,6 +435,7 @@ export function useFetchApp(orgId: string) {
         description: a.description,
         role: a.members.find((m) => m.user.id !== a.owner.id)?.role ?? "owner",
         status: "joined",
+        used: true,
         createdAt: a.createdAt,
       })) ?? []
     );
@@ -443,8 +448,9 @@ export function useFetchApp(orgId: string) {
         name: i.app.name,
         description: i.app.description,
         role: i.role,
-        status: "pending",
+        status: i.used ? "joined" : "pending",
         createdAt: i.createdAt,
+        used: i.used,
       })) ?? []
     );
   }, [invData]);
@@ -460,7 +466,7 @@ export function useFetchApp(orgId: string) {
   return { apps, loading, error, refetch };
 }
 export function useAppMembers(appId: string, orgId?: string) {
-  // Fetch apps + their members
+  // 1) Fetch joined apps + their members
   const {
     data: appsData,
     loading: appsLoading,
@@ -468,8 +474,7 @@ export function useAppMembers(appId: string, orgId?: string) {
     refetch: refetchApps,
   } = useQuery<AppData, AppVars>(GET_MY_APPS, { variables: { orgId } });
 
-  // Fetch pending invitations
-  // Build the "pending" list
+  // 2) Fetch pending invitations (always hit the network)
   const {
     data: invitesData,
     loading: invitesLoading,
@@ -477,23 +482,29 @@ export function useAppMembers(appId: string, orgId?: string) {
     refetch: refetchInvites,
   } = useQuery<AppInvitesData, { appId: string }>(GET_INVITATIONS, {
     variables: { appId },
+    fetchPolicy: "network-only",
   });
 
-  // Build the "joined" list
+  // 3) Ensure we refetch invites on client-side navigations or when appId changes
+  React.useEffect(() => {
+    refetchInvites();
+  }, [appId, refetchInvites]);
+
+  // 4) Build the "joined" list
   const joined = React.useMemo<MemberItem[]>(() => {
     const app = appsData?.myApps.find((a) => a.id === appId);
     if (!app) return [];
 
-    // 1) The owner
+    // a) Owner row
     const ownerRow: MemberItem = {
       id: app.owner.id,
       email: app.owner.email,
       username: app.owner.username,
-      role: "owner", // you can choose whatever role label you like
-      status: "joined", // now this is correctly inferred as the literal "joined"
+      role: "owner",
+      status: "joined",
     };
 
-    // 2) Everybody else
+    // b) Other members
     const memberRows: MemberItem[] = app.members.map((m) => ({
       id: m.user.id,
       email: m.user.email,
@@ -505,18 +516,36 @@ export function useAppMembers(appId: string, orgId?: string) {
     return [ownerRow, ...memberRows];
   }, [appsData, appId]);
 
-  // 3) Build the pending list from AppInvite[], which has `email`:
+  // 5) Dedupe by email: drop any pending invite if that email is already joined
+  const joinedEmails = React.useMemo(
+    () => new Set(joined.map((m) => m.email)),
+    [joined]
+  );
+
+  // 6) Build the filtered "pending" list
   const pending = React.useMemo<MemberItem[]>(() => {
     return (
-      invitesData?.invitations.map((i) => ({
-        id: i.id,
-        email: i.email,
-        username: "", // not known yet
-        role: i.role,
-        status: "pending",
-      })) ?? []
+      invitesData?.invitations
+        // a) skip invites for already-joined emails
+        .filter((inv) => !joinedEmails.has(inv.email))
+        // b) skip used or expired invites
+        .filter((inv) => !inv.used && new Date(inv.expiresAt) > new Date())
+        // c) map to your MemberItem shape
+        .map((i) => ({
+          id: i.id,
+          email: i.email,
+          username: "", // not known until they join
+          role: i.role,
+          status: "pending",
+        })) ?? []
     );
-  }, [invitesData]);
+  }, [invitesData, joinedEmails]);
+
+  // 7) Combine them
+  const members = React.useMemo<MemberItem[]>(
+    () => [...joined, ...pending],
+    [joined, pending]
+  );
 
   const loading = appsLoading || invitesLoading;
   const error = appsError || invitesError;
@@ -524,12 +553,6 @@ export function useAppMembers(appId: string, orgId?: string) {
     refetchApps();
     refetchInvites();
   };
-
-  // Merge them
-  const members = React.useMemo<MemberItem[]>(
-    () => [...joined, ...pending],
-    [joined, pending]
-  );
 
   return { members, loading, error, refetch };
 }

@@ -21,6 +21,7 @@ export function ApplicationsView() {
   const router = useRouter();
 
   const { apps, loading, error, refetch } = useFetchApp(orgId);
+  console.log(apps);
 
   if (loading) return <div className="p-4">Loading applications…</div>;
   if (error)
