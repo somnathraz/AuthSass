@@ -120,21 +120,28 @@ module.exports = {
       if (!req.userId) throw new Error("Not authenticated!");
 
       let filter;
-      if (orgId === "personal" || !orgId) {
-        // personal workspace: anything you own or are a member of
+
+      // 1. If no orgId is passed, fallback to personal org
+      if (!orgId) {
+        const personalOrg = await Organization.findOne({
+          owner: req.userId,
+          type: "PERSONAL",
+        });
+        if (!personalOrg) throw new Error("No personal org found.");
+        orgId = personalOrg._id.toString();
+      }
+
+      // 2. Fetch the org and check its type
+      const org = await Organization.findById(orgId);
+      if (!org) throw new Error("Organization not found.");
+
+      if (org.type === "PERSONAL") {
         filter = {
-          $or: [
-            { owner: req.userId },
-            { "members.user": req.userId }, // AppMembership
-          ],
+          $or: [{ owner: req.userId }, { "members.user": req.userId }],
         };
       } else {
-        // an org-scoped workspace
-        const org = await Organization.findById(orgId);
-        if (!org) throw new Error("Organization not found.");
-
+        // ORG mode — allow if they're a member or invited via app
         const isOrgMember = org.members.includes(req.userId);
-        // also allow if they have an AppMembership *in* that org:
         const invitedViaApp = await AppMembership.exists({
           user: req.userId,
           app: {
@@ -143,7 +150,7 @@ module.exports = {
         });
 
         if (!isOrgMember && !invitedViaApp) {
-          throw new Error("Organization not found or you are not a member.");
+          throw new Error("You are not a member of this organization.");
         }
 
         filter = { organizationId: orgId };
@@ -153,7 +160,6 @@ module.exports = {
         .populate("owner")
         .populate("members.user");
 
-      // drop any stale member slots
       apps.forEach((app) => {
         if (Array.isArray(app.members)) {
           app.members = app.members.filter((m) => m.user != null);
@@ -162,7 +168,6 @@ module.exports = {
 
       return apps;
     },
-
     invitations: async (_, { appId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Optionally, check that req.userId is allowed to invite for this app
@@ -212,7 +217,6 @@ module.exports = {
       // 5) Return one owner + the rest of the members
       return { owner, members };
     },
-
     userOrganizations: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
@@ -234,6 +238,7 @@ module.exports = {
             name: org.name,
             owner: org.owner,
             createdAt: org.createdAt,
+            type: org.type,
             imageUrl: org.imageUrl,
             members: mems.map((m) => ({
               user: m.user,
@@ -280,11 +285,12 @@ module.exports = {
       });
 
       // Create a personal organization for the user
-      const organizationName = `${username}'s Organization`;
+      const organizationName = `${username}'s Personal Workspace`;
       const organization = await Organization.create({
         name: organizationName,
         owner: user._id,
         members: [user._id],
+        type: "PERSONAL", // Add this line
       });
       await OrgMembership.create({
         user: user._id,
@@ -426,9 +432,10 @@ module.exports = {
 
       // create their personal organization
       const personalOrg = await Organization.create({
-        name: `${user.username}'s Organization`,
+        name: `${user.username}'s  Personal Workspace`,
         owner: user._id,
         members: [user._id],
+        type: "PERSONAL", // Add this line
       });
       user.organizationId = personalOrg._id;
       await user.save();
@@ -522,50 +529,87 @@ module.exports = {
     },
     // 2) Invitee hits link & submits their creds:
     acceptInvite: async (_, { token, username, password }, { req, res }) => {
-      // 1) consume the invite
+      console.log("🔍 [acceptInvite] received token:", token);
       const invite = await Invitation.findOneAndUpdate(
-        { token, used: false, expiresAt: { $gt: new Date() } },
+        {
+          token,
+          used: false,
+          expiresAt: { $gt: new Date() },
+        },
         { $set: { used: true } },
         { new: true }
       );
+
       if (!invite) throw new Error("Invalid or expired invitation.");
 
-      // 2) find or create the user
+      // 1) Lookup or create user
       let user = await User.findOne({ email: invite.email });
       if (!user) {
-        // …create user + personal org + OrgMembership…
+        if (!username || !password) {
+          throw new Error("Username and password required.");
+        }
+
+        const passwordHash = await hashPassword(password);
+        user = await User.create({
+          username,
+          email: invite.email,
+          passwordHash,
+          accountType: "personal",
+        });
+
+        // Ensure only one PERSONAL org per user
+        let personalOrg = await Organization.findOne({
+          owner: user._id,
+          type: "PERSONAL",
+        });
+
+        if (!personalOrg) {
+          personalOrg = await Organization.create({
+            name: `${username}'s Personal Workspace`,
+            owner: user._id,
+            members: [user._id],
+            type: "PERSONAL",
+          });
+
+          await OrgMembership.create({
+            user: user._id,
+            org: personalOrg._id,
+            role: "admin",
+          });
+        }
+
+        user.organizationId = personalOrg._id;
+        await user.save();
       }
 
-      // 3) **App-level** membership
+      // 2) App-level membership
       const existing = await AppMembership.findOne({
         user: user._id,
         app: invite.appId,
       });
+
       if (!existing) {
-        // a) AppMembership collection
         await AppMembership.create({
           user: user._id,
           app: invite.appId,
           role: invite.role,
         });
-        // b) **Mirror into App.members** so your App.find(...).populate("members.user") picks it up:
+
         await App.findByIdAndUpdate(invite.appId, {
           $addToSet: { members: { user: user._id, role: invite.role } },
         });
       }
 
-      // 4) issue tokens and return
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
+
       return {
         accessToken,
         refreshToken,
         user,
         appId: invite.appId.toString(),
-        organizationId: (
-          await Organization.findOne({ owner: user._id })
-        )._id.toString(),
+        organizationId: user.organizationId.toString(), // always return personal org
       };
     },
 
@@ -660,6 +704,7 @@ module.exports = {
           name: `${username}'s Personal Workspace`,
           owner: user._id,
           members: [user._id],
+          type: "PERSONAL", // Add this line
           createdAt: new Date().toISOString(),
         });
         await OrgMembership.create({
@@ -768,7 +813,6 @@ module.exports = {
       { token, username, password },
       { req, res }
     ) => {
-      // 1) consume the invite
       const invite = await OrgInvitation.findOneAndUpdate(
         { token, used: false, expiresAt: { $gt: new Date() } },
         { $set: { used: true } },
@@ -776,8 +820,9 @@ module.exports = {
       );
       if (!invite) throw new Error("Invalid or expired invite token.");
 
-      // 2) lookup or create the user
+      // 1) Lookup or create the user
       let user = await User.findOne({ email: invite.email });
+
       if (!user) {
         if (!username || !password) {
           throw new Error("Must supply username and password to register.");
@@ -788,33 +833,39 @@ module.exports = {
           email: invite.email,
           passwordHash,
           accountType: "personal",
-          // you can set a default role here if you like
         });
 
-        // create their personal org
-        const personal = await Organization.create({
-          name: `${username}'s Organization`,
+        // Ensure they have a personal org
+        let personalOrg = await Organization.findOne({
           owner: user._id,
-          members: [user._id],
-          createdAt: new Date().toISOString(),
+          type: "PERSONAL",
         });
 
-        user.organizationId = personal._id;
+        if (!personalOrg) {
+          personalOrg = await Organization.create({
+            name: `${username}'s Personal Workspace`,
+            owner: user._id,
+            members: [user._id],
+            type: "PERSONAL",
+          });
+
+          await OrgMembership.create({
+            user: user._id,
+            org: personalOrg._id,
+            role: "admin",
+          });
+        }
+
+        user.organizationId = personalOrg._id;
         await user.save();
-
-        // record membership
-        await OrgMembership.create({
-          user: user._id,
-          org: personal._id,
-          role: "admin",
-        });
       }
 
-      // 3) scoped org‐invite membership
+      // 2) Add membership to target org if not already present
       const existing = await OrgMembership.findOne({
         user: user._id,
         org: invite.orgId,
       });
+
       if (!existing) {
         await OrgMembership.create({
           user: user._id,
@@ -822,17 +873,15 @@ module.exports = {
           role: invite.role,
         });
 
-        // ←─── ensure the Organization.members array includes them ────→
         await Organization.findByIdAndUpdate(invite.orgId, {
           $addToSet: { members: user._id },
         });
       }
 
-      // 4) switch their “current” org to the invited one
+      // 3) Set current org as the invited one
       user.organizationId = invite.orgId;
       await user.save();
 
-      // 5) issue tokens & set cookies
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
@@ -843,6 +892,7 @@ module.exports = {
         user,
       };
     },
+
     removeOrganizationMember: async (_, { orgId, userId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
@@ -916,22 +966,33 @@ module.exports = {
     switchOrganization: async (_, { orgId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
-      // Check if the user is a member of the organization
       const organization = await Organization.findById(orgId);
       if (!organization) throw new Error("Organization not found.");
-      if (
-        !organization.members.some(
-          (memberId) => memberId.toString() === req.userId
-        )
-      )
-        throw new Error("You are not a member of this organization.");
 
-      // Update user's primary organization
       const user = await User.findById(req.userId);
-      user.organizationId = orgId;
+
+      if (organization.type === "PERSONAL") {
+        // Only the owner can switch to a personal org
+        if (organization.owner.toString() !== req.userId) {
+          throw new Error("You do not own this personal workspace.");
+        }
+      } else {
+        // For shared orgs, ensure the user is a member
+        const isMember = organization.members.some(
+          (memberId) => memberId.toString() === req.userId
+        );
+        if (!isMember) {
+          throw new Error("You are not a member of this organization.");
+        }
+      }
+
+      // Switch the user's current org context
+      user.organizationId = organization._id;
       await user.save();
+
       return organization;
     },
+
     createApiKey: async (_, __, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
       // Generate a new random API key
@@ -975,41 +1036,50 @@ module.exports = {
     },
     createApp: async (_, { name, description, orgId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
-
-      // load the user so we can read their personal org
       const user = await User.findById(req.userId);
-      if (!user.organizationId) {
-        throw new Error("No personal organization found on your account.");
-      }
+      if (!user) throw new Error("User not found.");
 
-      let organizationField;
-      if (orgId === "personal" || !orgId) {
-        const me = await User.findById(req.userId);
-        if (!me.organizationId) {
-          throw new Error("No personal organization found for user.");
-        }
-        organizationField = me.organizationId;
+      let targetOrg;
+
+      // Step 1: If orgId not provided, fallback to user's personal org
+      if (!orgId) {
+        targetOrg = await Organization.findOne({
+          owner: req.userId,
+          type: "PERSONAL",
+        });
+        if (!targetOrg) throw new Error("No personal organization found.");
       } else {
-        // org‑scoped
-        const org = await Organization.findById(orgId);
-        if (!org || !org.members.includes(req.userId)) {
-          throw new Error("Organization not found or you are not a member.");
+        targetOrg = await Organization.findById(orgId);
+        if (!targetOrg) throw new Error("Organization not found.");
+
+        if (targetOrg.type === "PERSONAL") {
+          if (targetOrg.owner.toString() !== req.userId) {
+            throw new Error("You do not own this personal organization.");
+          }
+        } else {
+          const isMember = targetOrg.members.some(
+            (id) => id.toString() === req.userId
+          );
+          if (!isMember) {
+            throw new Error("You are not a member of this organization.");
+          }
         }
-        organizationField = orgId;
       }
 
       const newApp = await App.create({
         name,
         description,
         owner: req.userId,
-        organizationId: organizationField, // <— note the property name
+        organizationId: targetOrg._id,
         createdAt: new Date().toISOString(),
       });
+
       await AppMembership.create({
         user: req.userId,
         app: newApp._id,
         role: "owner",
       });
+
       return newApp;
     },
     removeAppMember: async (_, { appId, userId }, { req }) => {

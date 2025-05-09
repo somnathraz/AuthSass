@@ -34,13 +34,20 @@ module.exports = gql`
     createdAt: String
     expiresAt: String!
   }
+  enum OrgType {
+    PERSONAL
+    ORGANIZATION
+  }
+
   type Organization {
     id: ID!
     name: String!
+    type: OrgType!
     owner: User!
     members: [OrgMember!]!
     createdAt: String!
     imageUrl: String
+    type: OrgType!
   }
 
   type AppMember {
@@ -135,8 +142,8 @@ module.exports = gql`
     # Invitee follows the link and finishes signup (or just “join” if already registered)
     acceptInvite(
       token: String!
-      username: String!
-      password: String!
+      username: String # now optional
+      password: String # now optional
     ): AcceptInvitePayload!
     refreshToken(refreshToken: String!): RefreshResponse!
     verifyEmail(token: String!): String
@@ -158,8 +165,8 @@ module.exports = gql`
     cancelOrgInvitation(inviteId: ID!): String!
     acceptOrganizationInvite(
       token: String!
-      username: String
-      password: String
+      username: String # optional for existing users
+      password: String # optional for existing users
     ): AuthPayload!
     switchOrganization(orgId: ID!): Organization!
     createApp(name: String!, description: String, orgId: ID!): App!
