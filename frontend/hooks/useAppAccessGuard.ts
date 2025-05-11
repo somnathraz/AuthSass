@@ -1,4 +1,3 @@
-// hooks/useAppAccessGuard.ts
 "use client";
 
 import { useRouter, useParams } from "next/navigation";
@@ -7,42 +6,46 @@ import { toast } from "sonner";
 import { useUserAndOrg, useAppMembers } from "@/services/authService";
 
 export function useAppAccessGuard() {
-  const { appId } = useParams<{ orgId: string; appId: string }>();
+  const { orgId, appId } = useParams<{ orgId: string; appId: string }>();
   const router = useRouter();
 
-  // get current user & their orgs (so we can find personal)
   const {
     user: me,
     organizations: userOrgsList,
     loading: loadingUser,
   } = useUserAndOrg();
 
-  // get all members of this app
   const { members: appMembers, loading: loadingMembers } = useAppMembers(
-    appId! /* orgId not needed here */
+    appId!,
+    orgId
   );
 
   useEffect(() => {
     if (loadingUser || loadingMembers) return;
-    if (!me || !appId) return;
+    if (!me || !appId || !orgId) return;
 
-    // Only check app membership
-    const isMember = appMembers.some((m) => m.id === me.id);
-    if (!isMember) {
+    // ✅ 1. Is user an app member?
+    const isAppMember = appMembers.some((m) => m.id === me.id);
+
+    // ✅ 2. Is user a member of the app's org?
+    const isOrgMember = userOrgsList.some((org) => org.id === orgId);
+
+    // ❌ Not allowed in either way → redirect
+    if (!isAppMember && !isOrgMember) {
       toast.error("You don’t have access to that app.", { duration: 5000 });
 
-      // Redirect to personal org’s apps list
-      const personal = userOrgsList.find((o) => o.type === "PERSONAL");
-      const fallback = personal?.id ?? me.organizationId ?? "";
-      router.replace(`/dashboard/${fallback}/apps`);
+      const personalOrg = userOrgsList.find((o) => o.type === "PERSONAL");
+      const fallbackOrgId = personalOrg?.id ?? me.organizationId ?? "";
+      router.replace(`/dashboard/${fallbackOrgId}`);
     }
   }, [
     me,
-    userOrgsList,
     appMembers,
+    userOrgsList,
     loadingUser,
     loadingMembers,
     appId,
+    orgId,
     router,
   ]);
 }

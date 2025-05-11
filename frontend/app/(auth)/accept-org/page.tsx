@@ -8,68 +8,89 @@ import { Button } from "@/components/ui/button";
 import { useAcceptOrganizationInvite } from "@/services/authService";
 
 export default function AcceptOrgInvitePage() {
-  const params = useSearchParams();
-  const token = params.get("token");
+  const token = useSearchParams().get("token") || "";
   const router = useRouter();
 
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [triedAutoJoin, setTriedAutoJoin] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  // ✂️ object-destructure, not array:
   const { acceptOrganizationInvite, loading, error } =
     useAcceptOrganizationInvite();
 
-  const [username, setUsername] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-
-  // Redirect if no token
+  // redirect if no token
   useEffect(() => {
-    if (!token) router.replace("/login");
+    if (!token) {
+      router.replace("/login");
+    }
   }, [token, router]);
 
-  const handleAccept = async () => {
-    if (!token) return;
+  // auto-join attempt for existing users
+  useEffect(() => {
+    if (!triedAutoJoin && token) {
+      setTriedAutoJoin(true);
+      acceptOrganizationInvite({ token })
+        .then((res) => {
+          const orgId = res.data!.acceptOrganizationInvite.user.organizationId;
+          router.replace(`/dashboard/${orgId}`);
+        })
+        .catch((err: unknown) => {
+          if (
+            err instanceof Error &&
+            err.message.includes("Must supply username")
+          ) {
+            setNeedsSetup(true);
+          } else if (err instanceof Error) {
+            alert(err.message);
+            router.replace("/login");
+          }
+        });
+    }
+  }, [triedAutoJoin, token, acceptOrganizationInvite, router]);
+
+  // final join for new users
+  const handleSetupJoin = async () => {
     try {
-      const result = await acceptOrganizationInvite({
-        token,
-        // only send username/password when provided
-        username: username || undefined,
-        password: password || undefined,
-      });
-
-      // result.data.acceptOrganizationInvite.user.organizationId
-      const orgId = result.data?.acceptOrganizationInvite.user.organizationId;
-      if (!orgId) throw new Error("Could not join organization.");
-
-      router.push(`/dashboard/${orgId}`);
+      const res = await acceptOrganizationInvite({ token, username, password });
+      const orgId = res.data!.acceptOrganizationInvite.user.organizationId;
+      router.replace(`/dashboard/${orgId}`);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-          ? err
-          : "An unexpected error occurred";
-      alert(message);
+      if (err instanceof Error) {
+        alert(err.message);
+      }
     }
   };
 
-  return (
-    <div className="max-w-md mx-auto p-6">
-      <h1 className="text-xl font-semibold mb-4">Accept Organization Invite</h1>
-      {error && <p className="text-red-500">{error.message}</p>}
+  if (!needsSetup) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-lg">Joining organization…</p>
+        {loading && <span className="ml-2 animate-pulse">⌛</span>}
+        {error && <p className="text-red-500 mt-2">{error.message}</p>}
+      </div>
+    );
+  }
 
+  return (
+    <div className="max-w-md mx-auto p-6 space-y-4">
+      <h1 className="text-xl font-semibold">Complete Sign-Up & Join</h1>
       <Input
         placeholder="Choose a username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        className="mb-2"
       />
       <Input
         type="password"
         placeholder="Choose a password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="mb-4"
       />
-      <Button onClick={handleAccept} disabled={loading}>
-        {loading ? "Joining…" : "Join Organization"}
+      <Button onClick={handleSetupJoin} disabled={loading}>
+        {loading ? "Signing up…" : "Sign Up & Join"}
       </Button>
+      {error && <p className="text-red-500">{error.message}</p>}
     </div>
   );
 }

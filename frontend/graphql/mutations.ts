@@ -21,7 +21,14 @@ export const CHANGE_PASSWORD = gql`
     changePassword(newPassword: $newPassword)
   }
 `;
-
+export const CHECK_USER = gql`
+  query CheckOrgInvite($token: String!) {
+    checkOrganizationInvite(token: $token) {
+      email
+      userExists
+    }
+  }
+`;
 export const SIGNUP_MUTATION = gql`
   mutation Signup($username: String!, $email: String!, $password: String!) {
     signup(username: $username, email: $email, password: $password) {
@@ -269,12 +276,13 @@ export const GET_MY_INVITATIONS = gql`
     myInvitations {
       id
       role
-      used # ← add this
+      used
       createdAt
       app {
         id
         name
         description
+        organizationId
       }
     }
   }

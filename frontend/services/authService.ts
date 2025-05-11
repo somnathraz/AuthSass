@@ -28,6 +28,7 @@ import {
   ACCEPT_ORG_INVITE,
   GET_ORG_MEMBERS,
   REMOVE_ORG_MEMBER,
+  CHECK_USER,
 } from "../graphql/mutations";
 interface MeQuery {
   me: {
@@ -35,6 +36,7 @@ interface MeQuery {
     username: string;
     email: string;
     image?: string;
+    role: string;
     organizationId: string | null;
   };
 }
@@ -98,6 +100,7 @@ interface MyInvitationsQuery {
       id: string;
       name: string;
       description?: string;
+      organizationId: string;
     };
   }>;
 }
@@ -254,6 +257,12 @@ export const useSignup = () => {
   };
   return { signup, data, error, loading };
 };
+
+export const useCheckOrgInvite = (token: string) =>
+  useQuery<
+    { checkOrganizationInvite: { email: string; userExists: boolean } },
+    { token: string }
+  >(CHECK_USER, { variables: { token } });
 
 export const useSocialLogin = () => {
   const [socialLoginMutation, { data, error, loading }] = useMutation(
@@ -443,19 +452,38 @@ export function useFetchApp(orgId: string) {
 
   const pending = React.useMemo<FetchAppItem[]>(() => {
     return (
-      invData?.myInvitations.map((i) => ({
-        id: i.app.id,
-        name: i.app.name,
-        description: i.app.description,
-        role: i.role,
-        status: i.used ? "joined" : "pending",
-        createdAt: i.createdAt,
-        used: i.used,
-      })) ?? []
+      invData?.myInvitations
+        .filter((i) => i.app.organizationId === orgId) // ← FIX
+        .map((i) => ({
+          id: i.app.id,
+          name: i.app.name,
+          description: i.app.description,
+          role: i.role,
+          status: i.used ? "joined" : "pending",
+          createdAt: i.createdAt,
+          used: i.used,
+        })) ?? []
     );
-  }, [invData]);
+  }, [invData, orgId]);
 
-  const apps = React.useMemo(() => [...joined, ...pending], [joined, pending]);
+  const apps = React.useMemo(() => {
+    const map = new Map<string, FetchAppItem>();
+
+    // Insert joined first (higher priority)
+    joined.forEach((app) => {
+      map.set(app.id, app);
+    });
+
+    // Insert pending only if not already joined
+    pending.forEach((app) => {
+      if (!map.has(app.id)) {
+        map.set(app.id, app);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [joined, pending]);
+
   const loading = appsLoading || invLoading;
   const error = appsError || invError;
   const refetch = () => {
@@ -465,6 +493,7 @@ export function useFetchApp(orgId: string) {
 
   return { apps, loading, error, refetch };
 }
+
 export function useAppMembers(appId: string, orgId?: string) {
   // 1) Fetch joined apps + their members
   const {
