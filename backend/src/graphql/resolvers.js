@@ -23,6 +23,7 @@ const Organization = require("../models/Organization");
 const OrgInvitation = require("../models/OrgInvitation");
 const OrgMembership = require("../models/OrgMembership");
 const AppMembership = require("../models/AppMembership");
+const { findOrCreateUserByEmail } = require("../utils/invite");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const dummyPassword = process.env.DUMMY_PASSWORD || "defaultDummyPassword123!";
@@ -137,6 +138,7 @@ module.exports = {
 
       if (org.type === "PERSONAL") {
         filter = {
+          organizationId: org._id,
           $or: [{ owner: req.userId }, { "members.user": req.userId }],
         };
       } else {
@@ -481,9 +483,63 @@ module.exports = {
     // 1) Admin invites someone:
     inviteUser: async (_, { appId, email, role }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
-      // TODO: check that req.userId may administer this app
 
-      // Generate a one-time token:
+      // 1. Disallow inviting yourself
+      const inviter = await User.findById(req.userId);
+      if (inviter.email.toLowerCase() === email.toLowerCase()) {
+        throw new Error("You cannot invite yourself.");
+      }
+
+      // 2. Load the app and ensure requester is admin/owner
+      const app = await App.findById(appId).populate("owner");
+      if (!app) throw new Error("App not found.");
+
+      const appMembership = await AppMembership.findOne({
+        app: appId,
+        user: req.userId,
+      });
+
+      const isOwner = app.owner._id.toString() === req.userId;
+      const isAdmin = appMembership?.role === "admin";
+
+      if (!isOwner && !isAdmin) {
+        throw new Error("Only app owners or admins can send invites.");
+      }
+
+      // 3. Check if user already has direct app access
+      const existingAppUser = await User.findOne({ email });
+      if (existingAppUser) {
+        const existingMembership = await AppMembership.findOne({
+          user: existingAppUser._id,
+          app: appId,
+        });
+        if (existingMembership) {
+          throw new Error("User is already a member of this app.");
+        }
+      }
+
+      // 4. Check if they already have access via organization
+      const org = await Organization.findById(app.organizationId);
+      if (!org) throw new Error("Associated organization not found.");
+
+      if (existingAppUser && org.members.includes(existingAppUser._id)) {
+        throw new Error(
+          "User already has access to this app via organization membership."
+        );
+      }
+
+      // 5. Check if invite already exists
+      const existingInvite = await Invitation.findOne({
+        email,
+        appId,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+      if (existingInvite) {
+        throw new Error("An active invitation already exists for this user.");
+      }
+
+      // 6. Create a new invite
       const token = crypto.randomBytes(24).toString("hex");
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
@@ -495,9 +551,9 @@ module.exports = {
         expiresAt,
       });
 
-      // Send the same magic link whether or not the user exists:
+      // 7. Send the email
       const baseUrl = process.env.FRONTEND_URL;
-      const link = `${baseUrl}/accept-invite?token=${invite.token}`;
+      const link = `${baseUrl}/accept-invite?token=${token}`;
 
       await sendEmail(
         email,
@@ -519,6 +575,7 @@ module.exports = {
 
       return invite;
     },
+
     cancelInvitation: async (_, { inviteId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated");
       const invite = await Invitation.findById(inviteId);
@@ -528,88 +585,55 @@ module.exports = {
       return "Invitation cancelled";
     },
     // 2) Invitee hits link & submits their creds:
-    acceptInvite: async (_, { token, username, password }, { req, res }) => {
-      console.log("🔍 [acceptInvite] received token:", token);
-      const invite = await Invitation.findOneAndUpdate(
-        {
-          token,
-          used: false,
-          expiresAt: { $gt: new Date() },
-        },
-        { $set: { used: true } },
-        { new: true }
-      );
-
-      if (!invite) throw new Error("Invalid or expired invitation.");
-
-      // 1) Lookup or create user
-      let user = await User.findOne({ email: invite.email });
-      if (!user) {
-        if (!username || !password) {
-          throw new Error("Username and password required.");
-        }
-
-        const passwordHash = await hashPassword(password);
-        user = await User.create({
-          username,
-          email: invite.email,
-          passwordHash,
-          accountType: "personal",
-        });
-
-        // Ensure only one PERSONAL org per user
-        let personalOrg = await Organization.findOne({
-          owner: user._id,
-          type: "PERSONAL",
-        });
-
-        if (!personalOrg) {
-          personalOrg = await Organization.create({
-            name: `${username}'s Personal Workspace`,
-            owner: user._id,
-            members: [user._id],
-            type: "PERSONAL",
-          });
-
-          await OrgMembership.create({
-            user: user._id,
-            org: personalOrg._id,
-            role: "admin",
-          });
-        }
-
-        user.organizationId = personalOrg._id;
-        await user.save();
+    acceptInvite: async (_, { token, username, password }, { res }) => {
+      // 1) load invite, don’t consume yet
+      const invite = await Invitation.findOne({
+        token,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+      if (!invite) {
+        throw new Error("Invalid or expired invitation.");
       }
 
-      // 2) App-level membership
-      const existing = await AppMembership.findOne({
+      // 2) find or create the user
+      const { user, isNew } = await findOrCreateUserByEmail(invite.email, {
+        username,
+        password,
+      });
+
+      // 3) grant App membership if needed
+      const existingAppMember = await AppMembership.findOne({
         user: user._id,
         app: invite.appId,
       });
-
-      if (!existing) {
+      if (!existingAppMember) {
         await AppMembership.create({
           user: user._id,
           app: invite.appId,
           role: invite.role,
         });
-
         await App.findByIdAndUpdate(invite.appId, {
           $addToSet: { members: { user: user._id, role: invite.role } },
         });
       }
 
+      // 4) issue tokens
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
+
+      // 5) now consume the invite
+      invite.used = true;
+      await invite.save();
 
       return {
         accessToken,
         refreshToken,
         user,
         appId: invite.appId.toString(),
-        organizationId: user.organizationId.toString(), // always return personal org
+        organizationId: user.organizationId.toString(),
+        requiresUserSetup: isNew,
       };
     },
 
@@ -748,6 +772,8 @@ module.exports = {
       const organization = await Organization.create({
         name,
         owner: req.userId,
+        type: "ORGANIZATION",
+
         members: [req.userId],
         createdAt: new Date().toISOString(),
       });
@@ -811,85 +837,61 @@ module.exports = {
     acceptOrganizationInvite: async (
       _,
       { token, username, password },
-      { req, res }
+      { res }
     ) => {
-      const invite = await OrgInvitation.findOneAndUpdate(
-        { token, used: false, expiresAt: { $gt: new Date() } },
-        { $set: { used: true } },
-        { new: true }
-      );
-      if (!invite) throw new Error("Invalid or expired invite token.");
-
-      // 1) Lookup or create the user
-      let user = await User.findOne({ email: invite.email });
-
-      if (!user) {
-        if (!username || !password) {
-          throw new Error("Must supply username and password to register.");
-        }
-        const passwordHash = await hashPassword(password);
-        user = await User.create({
-          username,
-          email: invite.email,
-          passwordHash,
-          accountType: "personal",
-        });
-
-        // Ensure they have a personal org
-        let personalOrg = await Organization.findOne({
-          owner: user._id,
-          type: "PERSONAL",
-        });
-
-        if (!personalOrg) {
-          personalOrg = await Organization.create({
-            name: `${username}'s Personal Workspace`,
-            owner: user._id,
-            members: [user._id],
-            type: "PERSONAL",
-          });
-
-          await OrgMembership.create({
-            user: user._id,
-            org: personalOrg._id,
-            role: "admin",
-          });
-        }
-
-        user.organizationId = personalOrg._id;
-        await user.save();
+      // 1) load invite, don’t consume yet
+      const invite = await OrgInvitation.findOne({
+        token,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+      if (!invite) {
+        throw new Error("Invalid or expired invitation token.");
       }
 
-      // 2) Add membership to target org if not already present
-      const existing = await OrgMembership.findOne({
+      // 2) find or create the user
+      const { user, isNew } = await findOrCreateUserByEmail(invite.email, {
+        username,
+        password,
+      });
+
+      // 3) grant Org membership if needed
+      const existingOrgMember = await OrgMembership.findOne({
         user: user._id,
         org: invite.orgId,
       });
-
-      if (!existing) {
+      if (!existingOrgMember) {
         await OrgMembership.create({
           user: user._id,
           org: invite.orgId,
           role: invite.role,
         });
-
         await Organization.findByIdAndUpdate(invite.orgId, {
           $addToSet: { members: user._id },
         });
       }
 
-      // 3) Set current org as the invited one
+      // 4) switch their “current” org
       user.organizationId = invite.orgId;
       await user.save();
 
+      // 5) issue tokens
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
+
+      // 6) now consume the invite
+      invite.used = true;
+      await invite.save();
 
       return {
         accessToken,
         refreshToken,
         user,
+        // for org‐invites we still conform to AcceptInvitePayload:
+        appId: "", // no app here
+        organizationId: invite.orgId.toString(),
+        requiresUserSetup: isNew,
       };
     },
 

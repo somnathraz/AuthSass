@@ -47,9 +47,7 @@ module.exports = gql`
     members: [OrgMember!]!
     createdAt: String!
     imageUrl: String
-    type: OrgType!
   }
-
   type AppMember {
     user: User!
     role: String!
@@ -111,6 +109,7 @@ module.exports = gql`
     user: User!
     appId: ID!
     organizationId: ID!
+    requiresUserSetup: Boolean! # ← new
   }
 
   type Query {
@@ -167,7 +166,7 @@ module.exports = gql`
       token: String!
       username: String # optional for existing users
       password: String # optional for existing users
-    ): AuthPayload!
+    ): AcceptInvitePayload!
     switchOrganization(orgId: ID!): Organization!
     createApp(name: String!, description: String, orgId: ID!): App!
     updateApp(appId: ID!, name: String, description: String): App!
