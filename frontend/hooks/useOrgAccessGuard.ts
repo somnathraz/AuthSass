@@ -20,10 +20,10 @@ export function useOrgAccessGuard() {
         // find the personal org by its type
         const personal = userOrgsList.find((o) => o.type === "PERSONAL");
         if (personal) {
-          router.replace(`/dashboard/${personal.id}/apps`);
+          router.replace(`/dashboard/${personal.id}`);
         } else if (me.organizationId) {
           // fallback if somehow personal isn't in the list
-          router.replace(`/dashboard/${me.organizationId}/apps`);
+          router.replace(`/dashboard/${me.organizationId}`);
         } else {
           router.replace("/dashboard");
         }
