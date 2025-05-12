@@ -585,8 +585,9 @@ module.exports = {
       return "Invitation cancelled";
     },
     // 2) Invitee hits link & submits their creds:
+    // resolvers.js
     acceptInvite: async (_, { token, username, password }, { res }) => {
-      // 1) load invite, don’t consume yet
+      // 1) Load invite, don’t consume yet
       const invite = await Invitation.findOne({
         token,
         used: false,
@@ -596,34 +597,67 @@ module.exports = {
         throw new Error("Invalid or expired invitation.");
       }
 
-      // 2) find or create the user
+      // 2) Find or create the user
       const { user, isNew } = await findOrCreateUserByEmail(invite.email, {
         username,
         password,
       });
 
-      // 3) grant App membership if needed
+      // 3) Load the app
+      const app = await App.findById(invite.appId);
+      if (!app) throw new Error("App not found");
+
+      // 4) Find or create the user's personal organization
+      let personalOrg = await Organization.findOne({
+        owner: user._id,
+        type: "PERSONAL",
+      });
+
+      if (!personalOrg) {
+        personalOrg = await Organization.create({
+          name: `${user.username}'s Personal Workspace`,
+          owner: user._id,
+          members: [user._id],
+          type: "PERSONAL",
+        });
+
+        await OrgMembership.create({
+          user: user._id,
+          org: personalOrg._id,
+          role: "admin",
+        });
+
+        user.organizationId = personalOrg._id;
+        await user.save();
+      }
+
+      // 5) Add app membership if not already present
       const existingAppMember = await AppMembership.findOne({
         user: user._id,
-        app: invite.appId,
+        app: app._id,
       });
+
       if (!existingAppMember) {
         await AppMembership.create({
           user: user._id,
-          app: invite.appId,
+          app: app._id,
           role: invite.role,
         });
-        await App.findByIdAndUpdate(invite.appId, {
-          $addToSet: { members: { user: user._id, role: invite.role } },
-        });
+
+        app.members.push({ user: user._id, role: invite.role });
+
+        // Move app to user's personal org
+        app.organizationId = personalOrg._id;
+
+        await app.save();
       }
 
-      // 4) issue tokens
+      // 6) Issue tokens
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
 
-      // 5) now consume the invite
+      // 7) Consume the invite
       invite.used = true;
       await invite.save();
 
@@ -631,8 +665,8 @@ module.exports = {
         accessToken,
         refreshToken,
         user,
-        appId: invite.appId.toString(),
-        organizationId: user.organizationId.toString(),
+        appId: app._id.toString(),
+        organizationId: personalOrg._id.toString(), // 👈 critical for frontend routing
         requiresUserSetup: isNew,
       };
     },
