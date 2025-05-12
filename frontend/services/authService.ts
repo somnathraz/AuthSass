@@ -624,19 +624,16 @@ export const useAcceptInvite = () => {
     AcceptInviteData,
     AcceptInviteVars
   >(ACCEPT_INVITE, {
-    // after the mutation completes, refetch both queries
     awaitRefetchQueries: true,
     refetchQueries: (mutationResult) => {
       if (!mutationResult.data) return [];
       const { appId, organizationId } = mutationResult.data.acceptInvite;
 
       return [
-        // “joined” apps
         {
           query: GET_MY_APPS,
           variables: { orgId: organizationId },
         },
-        // “pending” invites
         {
           query: GET_INVITATIONS,
           variables: { appId },
@@ -645,10 +642,17 @@ export const useAcceptInvite = () => {
     },
   });
 
-  const acceptInvite = (token: string, username: string, password: string) =>
-    acceptInviteMutation({
-      variables: { token, username, password },
-    });
+  const acceptInvite = (
+    token: string,
+    username?: string,
+    password?: string
+  ) => {
+    const variables: AcceptInviteVars = { token };
+    if (username) variables.username = username;
+    if (password) variables.password = password;
+
+    return acceptInviteMutation({ variables });
+  };
 
   return {
     acceptInvite,
@@ -657,6 +661,7 @@ export const useAcceptInvite = () => {
     error,
   };
 };
+
 export const useAdminCreateUser = () => {
   const [adminCreateUserMutation, { data, error, loading }] =
     useMutation(ADMIN_CREATE_USER);
