@@ -12,7 +12,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@graphql-tools/merge": "^9.0.24",
+    "@graphql-tools/schema": "^10.0.23",
     "apollo-server-express": "^3.13.0",
+    "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -21,12 +24,15 @@
     "express-rate-limit": "^7.5.0",
     "google-auth-library": "^9.15.1",
     "graphql": "^16.10.0",
+    "graphql-subscriptions": "^3.0.0",
     "graphql-type-json": "^0.3.2",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.12.1",
+    "node-cache": "^5.1.2",
     "nodemailer": "^6.10.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "eslint": "^9.22.0",

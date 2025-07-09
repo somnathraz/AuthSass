@@ -1,14 +1,41 @@
 const express = require("express");
 const cors = require("cors");
 const { ApolloServer } = require("apollo-server-express");
+const { PubSub } = require("graphql-subscriptions");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
-const typeDefs = require("./src/graphql/typeDefs");
+const schema = require("./src/graphql/schema");
 const cookieParser = require("cookie-parser");
-const resolvers = require("./src/graphql/resolvers");
+
+// Load environment variables first
+dotenv.config();
+
+// Startup validation
+console.log("🚀 Starting Auth-SaaS Backend...");
+console.log("📋 Environment Check:");
+console.log("  - NODE_ENV:", process.env.NODE_ENV || "development");
+console.log("  - PORT:", process.env.PORT || 4000);
+console.log(
+  "  - MONGODB_URI:",
+  process.env.MONGODB_URI ? "✅ Set" : "❌ Missing"
+);
+console.log(
+  "  - JWT_SECRET:",
+  process.env.JWT_SECRET ? "✅ Set" : "❌ Missing"
+);
+console.log(
+  "  - GOOGLE_CLIENT_ID:",
+  process.env.GOOGLE_CLIENT_ID ? "✅ Set" : "❌ Missing"
+);
+console.log(
+  "  - EMAIL_USER:",
+  process.env.EMAIL_USER ? "✅ Set" : "❌ Missing"
+);
+
 const allowedOrigins = [
   "http://localhost:3000",
+  "http://localhost:3001",
   "https://studio.apollographql.com",
 ];
 const authMiddleware = require("./src/middleware/authMiddleware");
@@ -16,11 +43,11 @@ const {
   loginLimiter,
   resetPasswordLimiter,
 } = require("./src/middleware/rateLimiter");
-
-dotenv.config();
+const User = require("./src/models/User");
 
 const startServer = async () => {
   const app = express();
+  const pubsub = new PubSub();
 
   app.use(
     cors({
@@ -62,21 +89,41 @@ const startServer = async () => {
   });
 
   const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-    context: ({ req, res }) => ({ req, res }), // now includes res
+    schema,
+    context: async ({ req, res }) => {
+      let user = null;
+      if (req.userId) {
+        try {
+          user = await User.findById(req.userId);
+        } catch (error) {
+          console.error("Error fetching user for context:", error);
+        }
+      }
+      return { req, res, pubsub, user };
+    },
   });
 
   await server.start();
   server.applyMiddleware({ app, cors: false });
 
-  mongoose.connect(process.env.MONGODB_URI).then(() => {
-    app.listen({ port: process.env.PORT || 4000 }, () =>
-      console.log(
-        `🚀 Server ready at http://localhost:4000${server.graphqlPath}`
-      )
-    );
-  });
+  mongoose
+    .connect(process.env.MONGODB_URI)
+    .then(() => {
+      console.log("💾 Connected to MongoDB successfully");
+
+      app.listen({ port: process.env.PORT || 4000 }, () => {
+        console.log(
+          `🚀 Server ready at http://localhost:${process.env.PORT || 4000}${server.graphqlPath}`
+        );
+        console.log("📡 GraphQL Playground available for testing");
+        console.log("🔐 Social login with Google is configured");
+        console.log("✨ Backend startup complete!");
+      });
+    })
+    .catch((err) => {
+      console.error("❌ Failed to connect to MongoDB:", err.message);
+      process.exit(1);
+    });
 };
 
 startServer();

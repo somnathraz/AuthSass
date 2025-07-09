@@ -1,23 +1,54 @@
+/**
+ * @deprecated This file is deprecated. Use the new modular schema system in src/graphql/schema/ instead.
+ * This legacy file will be removed in a future version.
+ * 
+ * The new structure provides:
+ * - Better organization with separate schema files
+ * - Type safety and better maintainability
+ * - Modular resolver system
+ * 
+ * Please use:
+ * - src/graphql/schema/index.js (main schema)
+ * - src/graphql/schema/*.schema.js (individual schemas)
+ * - src/graphql/resolvers/*.resolvers.js (individual resolvers)
+ */
+
 const { gql } = require("apollo-server-express");
 
 module.exports = gql`
   scalar JSON
 
+  enum Role {
+    SUPER_ADMIN
+    ADMIN
+    MEMBER
+    VIEWER
+    OWNER
+  }
+
   type User {
     id: ID!
     username: String!
     email: String!
-    role: String!
+    firstName: String
+    lastName: String
+    bio: String
+    location: String
+    website: String
+    profileImage: String
+    role: Role!
     accountType: String!
     organizationId: ID
     requirePasswordReset: Boolean!
+    isEmailVerified: Boolean!
+    lastLoginAt: String
     createdAt: String!
   }
   type OrgInvitation {
     id: ID!
     email: String!
     orgId: ID!
-    role: String!
+    role: Role!
     token: String!
     used: Boolean!
     createdAt: String!
@@ -27,7 +58,7 @@ module.exports = gql`
     id: ID!
     email: String!
     appId: ID!
-    role: String!
+    role: Role!
     token: String!
     used: Boolean!
     app: App!
@@ -50,7 +81,7 @@ module.exports = gql`
   }
   type AppMember {
     user: User!
-    role: String!
+    role: Role!
   }
 
   type App {
@@ -88,7 +119,7 @@ module.exports = gql`
   }
   type OrgMember {
     user: User!
-    role: String!
+    role: Role!
   }
 
   type OrgMemberResponse {
@@ -104,12 +135,14 @@ module.exports = gql`
     timestamp: String!
   }
   type AcceptInvitePayload {
-    accessToken: String!
-    refreshToken: String!
-    user: User!
-    appId: ID!
-    organizationId: ID!
-    requiresUserSetup: Boolean! # ← new
+    accessToken: String
+    refreshToken: String
+    user: User
+    appId: ID
+    organizationId: ID
+    requiresUserSetup: Boolean!
+    userExists: Boolean!
+    email: String
   }
 
   type Query {
@@ -136,9 +169,30 @@ module.exports = gql`
       password: String!
     ): SignupResponse!
     login(email: String!, password: String!): AuthPayload!
-    inviteUser(appId: ID!, email: String!, role: String!): Invitation!
+    # Profile Management
+    updateProfile(
+      firstName: String
+      lastName: String
+      bio: String
+      location: String
+      website: String
+    ): User!
+    updateAvatar(avatar: String!): User!
+    updatePassword(currentPassword: String!, newPassword: String!): String!
+    updateEmail(newEmail: String!, password: String!): User!
+    # User Settings
+    updateUserSettings(
+      emailNotifications: Boolean
+      securityAlerts: Boolean
+      loginNotifications: Boolean
+      marketingEmails: Boolean
+    ): User!
+    # Account Deletion
+    deleteAccount(password: String!, confirmation: String!): String!
+    exportUserData: String!
+    inviteUser(appId: ID!, email: String!, role: Role!): Invitation!
     cancelInvitation(inviteId: ID!): String!
-    # Invitee follows the link and finishes signup (or just “join” if already registered)
+    # Invitee follows the link and finishes signup (or just "join" if already registered)
     acceptInvite(
       token: String!
       username: String # now optional
@@ -147,11 +201,11 @@ module.exports = gql`
     refreshToken(refreshToken: String!): RefreshResponse!
     verifyEmail(token: String!): String
     requestPasswordReset(email: String!): String
-    adminCreateUser(appId: ID!, email: String!, role: String!): User!
+    adminCreateUser(appId: ID!, email: String!, role: Role!): User!
     # After login, user uses this to set their own password
     changePassword(newPassword: String!): String!
     resetPassword(token: String!, newPassword: String!): String
-    updateUserRole(userId: ID!, role: String!): User!
+    updateUserRole(userId: ID!, role: Role!): User!
     deleteUser(userId: ID!): String!
     socialLogin(provider: String!, token: String!): AuthPayload!
     createOrganization(name: String!): Organization!
@@ -159,7 +213,7 @@ module.exports = gql`
     inviteOrganizationMember(
       orgId: ID!
       email: String!
-      role: String!
+      role: Role!
     ): OrgInvitation!
     cancelOrgInvitation(inviteId: ID!): String!
     acceptOrganizationInvite(
@@ -171,9 +225,9 @@ module.exports = gql`
     createApp(name: String!, description: String, orgId: ID!): App!
     updateApp(appId: ID!, name: String, description: String): App!
     deleteApp(appId: ID!): String!
-    addAppMember(appId: ID!, email: String!, role: String!): App!
+    addAppMember(appId: ID!, email: String!, role: Role!): App!
     removeAppMember(appId: ID!, userId: ID!): App!
-    updateAppMemberRole(appId: ID!, userId: ID!, role: String!): App!
+    updateAppMemberRole(appId: ID!, userId: ID!, role: Role!): App!
     createApiKey(appId: ID!): ApiKey!
     revokeApiKey(apiKeyId: ID!): String!
   }

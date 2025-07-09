@@ -1,0 +1,86 @@
+🔧 TESTING FIXED PROBLEMATIC RESOLVERS
+======================================
+
+🔍 Testing validateToken (Fixed Schema)...
+✅ validateToken (Fixed Schema) PASSED
+   Data: {
+  "validateToken": {
+    "valid": true,
+    "user": {
+      "id": "68321c5edab906b56003f5ad",
+      "username": "Somnath Khadanga",
+      "email": "somnathkhadanga810@gmail.com"
+    },
+    "expiresAt": "2025-05-25T11:43:28.000Z",
+    "error": null
+  }
+}
+🔍 Testing userAppAccess (Fixed Runtime)...
+✅ userAppAccess (Fixed Runtime) PASSED
+   Data: {
+  "userAppAccess": {
+    "hasAccess": true,
+    "role": "OWNER",
+    "accessType": "DIRECT",
+    "permissions": {
+      "canRead": true,
+      "canWrite": true,
+      "canDelete": true,
+      "canInvite": true,
+      "canManageSettings": true
+    }
+  }
+}
+🔍 Testing apps (Fixed Serialization)...
+❌ apps (Fixed Serialization) FAILED:
+   Error: Cannot return null for non-nullable field App.organization.
+🔍 Testing createOrganization (Fixed Enum)...
+✅ createOrganization (Fixed Enum) PASSED
+   Data: {
+  "createOrganization": {
+    "success": true,
+    "organization": {
+      "id": "6832f450a953af50678ac8b4",
+      "name": "Test Org 1748169808550",
+      "type": "COMPANY",
+      "description": "A test organization for testing fixes"
+    },
+    "errors": []
+  }
+}
+🔍 Testing changePassword (Fixed Validation)...
+✅ changePassword (Fixed Validation) PASSED
+   Data: {
+  "changePassword": {
+    "success": false,
+    "message": "Password change failed",
+    "errors": [
+      {
+        "message": "Current password is incorrect",
+        "field": "currentPassword"
+      }
+    ]
+  }
+}
+🔍 Testing updateApp (Should Work)...
+✅ updateApp (Should Work) PASSED
+   Data: {
+  "updateApp": {
+    "success": true,
+    "app": {
+      "id": "6832d7f197a2286ea2024c26",
+      "name": "Full Featured App Test",
+      "description": "Updated description for testing fixes",
+      "updatedAt": "2025-05-25T10:43:29.306Z"
+    },
+    "errors": []
+  }
+}
+
+📊 PROBLEMATIC RESOLVER FIX RESULTS
+====================================
+✅ Passed: 5
+❌ Failed: 1
+📈 Success Rate: 83.3%
+
+⚠️  Some resolvers still need attention.

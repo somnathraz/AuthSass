@@ -1,14 +1,16 @@
 const nodemailer = require("nodemailer");
 
 const sendEmail = async (to, subject, text) => {
-  //   console.log(
-  //     process.env.EMAIL_USER,
-  //     process.env.EMAIL_PASS,
-  //     to,
-  //     subject,
-  //     text,
-  //     "hwello"
-  //   );
+  // Development mode - just log the email instead of sending
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log("📧 [DEV MODE] Email would be sent:");
+    console.log(`  To: ${to}`);
+    console.log(`  Subject: ${subject}`);
+    console.log(`  Content: ${text}`);
+    console.log("  ✅ Email logged (not sent in development mode)");
+    return;
+  }
+
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 465, // Use 465 for SSL or 587 for TLS
@@ -26,9 +28,15 @@ const sendEmail = async (to, subject, text) => {
       subject,
       text,
     });
-    console.log(`Email sent to ${to}`);
+    console.log(`✅ Email sent to ${to}`);
   } catch (error) {
-    console.error("Error sending email:", error);
+    console.error("❌ Error sending email:", error);
+    // In development, don't throw error - just log it
+    if (process.env.NODE_ENV === 'development') {
+      console.log("📧 [DEV MODE] Email failed to send but continuing...");
+      return;
+    }
+    throw error;
   }
 };
 

@@ -1,3 +1,17 @@
+/**
+ * @deprecated This file is deprecated. Use the new modular resolver system in src/graphql/resolvers/ instead.
+ * This legacy file will be removed in a future version.
+ * 
+ * The new structure provides:
+ * - Better organization with separate resolver files
+ * - Type safety and better maintainability
+ * - Modern authentication and authorization patterns
+ * 
+ * Please use:
+ * - src/graphql/resolvers/*.resolvers.js (individual resolvers)
+ * - src/graphql/schema/index.js (combines all resolvers)
+ */
+
 // graphql/resolvers.js
 const User = require("../models/User");
 const Invitation = require("../models/Invitation");
@@ -87,7 +101,7 @@ module.exports = {
       const org = await Organization.findById(orgId);
       if (!org) throw new Error("Organization not found.");
       if (!org.members.includes(req.userId)) {
-        throw new Error("You’re not a member of that org.");
+        throw new Error("You're not a member of that org.");
       }
 
       // 2) load the invites
@@ -198,7 +212,7 @@ module.exports = {
       const org = await Organization.findById(orgId);
       if (!org) throw new Error("Organization not found.");
       if (!org.members.includes(req.userId))
-        throw new Error("You’re not a member of that org.");
+        throw new Error("You're not a member of that org.");
 
       // 2) Fetch the owner once
       const owner = await User.findById(org.owner);
@@ -557,7 +571,7 @@ module.exports = {
 
       await sendEmail(
         email,
-        "You’ve been invited to join OurApp!",
+        "You've been invited to join OurApp!",
         [
           `Hi there!`,
           ``,
@@ -587,7 +601,7 @@ module.exports = {
     // 2) Invitee hits link & submits their creds:
     // resolvers.js
     acceptInvite: async (_, { token, username, password }, { res }) => {
-      // 1) Load invite, don’t consume yet
+      // 1) Load invite, don't consume yet
       const invite = await Invitation.findOne({
         token,
         used: false,
@@ -645,19 +659,44 @@ module.exports = {
         });
 
         app.members.push({ user: user._id, role: invite.role });
-
-        // Move app to user's personal org
-        app.organizationId = personalOrg._id;
-
         await app.save();
       }
 
-      // 6) Issue tokens
+      // 6) Ensure user has access to the app's organization
+      // Check if the app belongs to an organization different from user's personal org
+      if (app.organizationId.toString() !== personalOrg._id.toString()) {
+        // Check if user is already a member of the app's organization
+        const existingOrgMember = await OrgMembership.findOne({
+          user: user._id,
+          org: app.organizationId,
+        });
+
+        if (!existingOrgMember) {
+          // Add user to the app's organization as a member
+          await OrgMembership.create({
+            user: user._id,
+            org: app.organizationId,
+            role: "member", // Default role for app invitation
+          });
+
+          // Add user to the organization's members array
+          await Organization.findByIdAndUpdate(
+            app.organizationId,
+            { $addToSet: { members: user._id } }
+          );
+        }
+
+        // Set user's current organization to the app's organization
+        user.organizationId = app.organizationId;
+        await user.save();
+      }
+
+      // 7) Issue tokens
       const { accessToken, refreshToken } = await generateTokens(user);
       res.cookie("token", accessToken, { httpOnly: true, path: "/" });
       res.cookie("refreshToken", refreshToken, { httpOnly: true, path: "/" });
 
-      // 7) Consume the invite
+      // 8) Consume the invite
       invite.used = true;
       await invite.save();
 
@@ -666,7 +705,7 @@ module.exports = {
         refreshToken,
         user,
         appId: app._id.toString(),
-        organizationId: personalOrg._id.toString(), // 👈 critical for frontend routing
+        organizationId: app.organizationId.toString(), // Return the app's organization, not personal org
         requiresUserSetup: isNew,
       };
     },
@@ -757,7 +796,7 @@ module.exports = {
           accountType: "personal",
         });
 
-        // b) create their “personal” organization
+        // b) create their "personal" organization
         const personalOrg = await Organization.create({
           name: `${username}'s Personal Workspace`,
           owner: user._id,
@@ -797,7 +836,7 @@ module.exports = {
       });
 
       await logEvent("SOCIAL_LOGIN", user._id, { email });
-      return { accessToken, refreshToken, user };
+      return { accessToken, refreshToken, user, requirePasswordReset: false };
     },
     createOrganization: async (_, { name }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
@@ -852,7 +891,7 @@ module.exports = {
       const link = `${process.env.FRONTEND_URL}/accept-org?token=${token}`;
       await sendEmail(
         email,
-        "You’ve been invited to join our organization!",
+        "You've been invited to join our organization!",
         `Click to accept: ${link}\n\nExpires in 48h.`
       );
 
@@ -873,7 +912,7 @@ module.exports = {
       { token, username, password },
       { res }
     ) => {
-      // 1) load invite, don’t consume yet
+      // 1) load invite, don't consume yet
       const invite = await OrgInvitation.findOne({
         token,
         used: false,
@@ -905,7 +944,7 @@ module.exports = {
         });
       }
 
-      // 4) switch their “current” org
+      // 4) switch their "current" org
       user.organizationId = invite.orgId;
       await user.save();
 
@@ -922,7 +961,7 @@ module.exports = {
         accessToken,
         refreshToken,
         user,
-        // for org‐invites we still conform to AcceptInvitePayload:
+        // for org-invites we still conform to AcceptInvitePayload:
         appId: "", // no app here
         organizationId: invite.orgId.toString(),
         requiresUserSetup: isNew,
@@ -932,7 +971,7 @@ module.exports = {
     removeOrganizationMember: async (_, { orgId, userId }, { req }) => {
       if (!req.userId) throw new Error("Not authenticated!");
 
-      // 1) You can’t remove yourself
+      // 1) You can't remove yourself
       if (userId === req.userId) {
         throw new Error("You cannot remove yourself from the organization.");
       }
@@ -946,7 +985,7 @@ module.exports = {
         throw new Error("Only org admins can remove members.");
       }
 
-      // 3) Fetch the target’s membership to see their role
+      // 3) Fetch the target's membership to see their role
       const targetMembership = await OrgMembership.findOne({
         user: userId,
         org: orgId,
@@ -955,7 +994,7 @@ module.exports = {
         throw new Error("That user is not a member of this organization.");
       }
 
-      // 4) If they’re an admin, make sure there is at least one other admin
+      // 4) If they're an admin, make sure there is at least one other admin
       if (targetMembership.role === "admin") {
         const adminCount = await OrgMembership.countDocuments({
           org: orgId,
@@ -1113,7 +1152,7 @@ module.exports = {
       await AppMembership.create({
         user: req.userId,
         app: newApp._id,
-        role: "owner",
+        role: "OWNER",
       });
 
       return newApp;
