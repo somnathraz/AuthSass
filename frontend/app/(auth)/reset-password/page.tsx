@@ -1,26 +1,26 @@
 // app/reset-password/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useResetPassword } from "@/services/authService";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const params = useSearchParams();
   const token = params.get("token") || "";
   const router = useRouter();
 
   const [newPassword, setNewPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const { resetPassword, loading, error, data } = useResetPassword();
 
   useEffect(() => {
-    if (data) {
+    if (data?.resetPassword?.success) {
       // after success, redirect to login
       router.push("/login");
     }
@@ -28,11 +28,19 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirm) {
+    setFormError(null);
+    
+    if (newPassword !== confirmPassword) {
       setFormError("Passwords do not match");
       return;
     }
-    await resetPassword(token, newPassword);
+    
+    if (newPassword.length < 6) {
+      setFormError("Password must be at least 6 characters");
+      return;
+    }
+    
+    await resetPassword(token, newPassword, confirmPassword);
   };
 
   return (
@@ -59,9 +67,9 @@ export default function ResetPasswordPage() {
             id="confirm"
             type="password"
             required
-            value={confirm}
+            value={confirmPassword}
             onChange={(e) => {
-              setConfirm(e.target.value);
+              setConfirmPassword(e.target.value);
               setFormError(null);
             }}
             className="mt-1"
@@ -74,5 +82,17 @@ export default function ResetPasswordPage() {
         </Button>
       </form>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-lg">Loading...</p>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

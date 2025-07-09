@@ -43,7 +43,6 @@ export function SignupForm({
     setErrors({}); // Clear any previous errors
     try {
       const response = await signup(userName, email, password);
-      const me = response.data.login.user;
       // Use response.data.signup since your resolver returns that shape.
       const userData = response.data.signup;
       setUser({
@@ -53,7 +52,7 @@ export function SignupForm({
         image: userData.user.image,
       });
       console.log("Signup successful:", userData);
-      router.push(`/dashboard/${me.organizationId}`);
+      router.push(`/dashboard/${userData.user.organizationId}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         const errMsg = error.message;
@@ -91,12 +90,15 @@ export function SignupForm({
     ) {
       window.google.accounts.id.initialize({
         client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
-        callback: (response: { credential: string }) => {
-          const googleIdToken = response.credential;
-          // console.log(googleIdToken);
-          socialLogin("google", googleIdToken)
-            .then((res) => {
-              console.log("Google login successful:", res.data.socialLogin);
+        callback: async (response: { credential: string }) => {
+          try {
+            const googleIdToken = response.credential;
+            console.log("Google ID Token received:", googleIdToken.substring(0, 20) + "...");
+
+            const res = await socialLogin("google", googleIdToken);
+            console.log("Google login successful:", res);
+            
+            if (res.data?.socialLogin) {
               const userData = res.data.socialLogin;
               setUser({
                 id: userData.user.id,
@@ -105,16 +107,23 @@ export function SignupForm({
                 image: userData.user.image,
               });
               router.push(`/dashboard/${userData.user.organizationId}`);
-            })
-            .catch((err) => {
-              console.error("Google login error:", err);
+            } else {
+              console.error("No socialLogin data in response:", res);
+              setErrors({ general: "Social login failed. Please try again." });
+            }
+          } catch (err) {
+            console.error("Google login error:", err);
+            setErrors({ 
+              general: err instanceof Error ? err.message : "Social login failed. Please try again." 
             });
+          }
         },
       });
       // Trigger the prompt for Google Identity Services
       window.google.accounts.id.prompt();
     } else {
       console.error("Google Identity Services not loaded");
+      setErrors({ general: "Google Sign-In is not available. Please try again." });
     }
   };
 

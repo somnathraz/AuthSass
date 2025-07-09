@@ -30,16 +30,36 @@ export function NavMain({
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
-          <Link key={item.title} href={item.url}>
+          <SidebarMenuItem key={item.title}>
             <Collapsible asChild className="group/collapsible">
-              <SidebarMenuItem>
-                <SidebarMenuButton tooltip={item.title}>
+              <Link 
+                href={item.url}
+                onClick={(e) => {
+                  // Ensure proper navigation event handling
+                  e.stopPropagation();
+                  console.log(`🔗 Navigation clicked: ${item.title} -> ${item.url}`);
+                }}
+                style={{
+                  // Ensure link is always clickable
+                  pointerEvents: 'auto',
+                  position: 'relative',
+                  zIndex: 1
+                }}
+              >
+                <SidebarMenuButton 
+                  tooltip={item.title}
+                  isActive={item.isActive}
+                  onClick={(e) => {
+                    // Prevent double event handling
+                    e.stopPropagation();
+                  }}
+                >
                   {item.icon && <item.icon />}
                   <span>{item.title}</span>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </Link>
             </Collapsible>
-          </Link>
+          </SidebarMenuItem>
         ))}
       </SidebarMenu>
     </SidebarGroup>

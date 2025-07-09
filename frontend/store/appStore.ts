@@ -9,12 +9,23 @@ interface User {
   role?: string;
 }
 
+interface CurrentOrganization {
+  id: string;
+  name: string;
+  type: string;
+  userRole?: string;
+  imageUrl?: string;
+}
+
 interface AppStore {
   selectedAppId: string | null;
   setSelectedAppId: (id: string) => void;
   user: User | null;
   setUser: (user: User) => void;
   clearUser: () => void;
+  currentOrganization: CurrentOrganization | null;
+  setCurrentOrganization: (organization: CurrentOrganization | null) => void;
+  clearCurrentOrganization: () => void;
   hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 }
@@ -26,13 +37,19 @@ export const useAppStore = create<AppStore>()(
         setSelectedAppId: (id) => set({ selectedAppId: id }),
         user: null,
         setUser: (user) => set({ user }),
-        clearUser: () => set({ user: null }),
+        clearUser: () => set({ user: null, currentOrganization: null }),
+        currentOrganization: null,
+        setCurrentOrganization: (organization) => set({ currentOrganization: organization }),
+        clearCurrentOrganization: () => set({ currentOrganization: null }),
         hasHydrated: false,
         setHasHydrated: (state) => set({ hasHydrated: state }),
       }),
       {
         name: "app-storage",
-        partialize: (state) => ({ user: state.user }),
+        partialize: (state) => ({ 
+          user: state.user,
+          currentOrganization: state.currentOrganization 
+        }),
         onRehydrateStorage: () => (state) => {
           state?.setHasHydrated(true);
         },

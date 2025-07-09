@@ -151,7 +151,7 @@ export function Navbar({ logoText, user }: NavbarProps) {
         </div>
 
         {/* User menu */}
-        <DropdownMenu>
+        {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="p-0">
               <Avatar className="h-8 w-8">
@@ -190,7 +190,7 @@ export function Navbar({ logoText, user }: NavbarProps) {
               <LogOut className="mr-2 h-4 w-4" /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu> */}
       </nav>
 
       {/* Create Organization Modal */}

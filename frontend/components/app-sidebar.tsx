@@ -17,6 +17,7 @@ import { useParams, useRouter, usePathname } from "next/navigation";
 import { useFetchApp, useUserAndOrg } from "@/services/authService";
 import { CreateAppModal } from "@/components/CreateAppModal/CreateAppModal";
 import { CreateOrgModal } from "@/components/CreateOrgModal/CreateOrgModal";
+import { SpinnerLoader, PageLoader } from "@/components/ui/loading";
 
 export type NavItem = {
   title: string;
@@ -51,32 +52,142 @@ export function AppSidebar({
     error: uError,
   } = useUserAndOrg();
 
+  // CRITICAL: Always call useFetchApp with consistent parameter to avoid hooks violations
+  // Use empty string as fallback to ensure hook is always called consistently
   const {
     apps,
     loading: aLoading,
     error: aError,
     refetch: refetchApps,
-  } = useFetchApp(orgId);
+  } = useFetchApp(orgId || "");
 
+  // Determine if we're in org mode vs app mode
   const isOrgMode = !params.appId;
+  // Always fetch apps when we have an orgId - needed for both org mode (to show app list) and app mode (to show app dropdown)
+  const shouldShowApps = orgId && typeof orgId === "string" && orgId.length > 0;
 
-  if (uLoading) return <div>Loading user…</div>;
-  if (uError) return <div className="text-red-600">Error loading user</div>;
-  if (!user) return null;
+  // Enhanced loading and error handling
+  if (uLoading) {
+    return (
+      <Sidebar collapsible="icon" {...sidebarProps}>
+        <SidebarContent>
+          <div className="flex items-center justify-center py-8">
+            <SpinnerLoader text="Loading user..." />
+          </div>
+        </SidebarContent>
+      </Sidebar>
+    );
+  }
 
-  if (!isOrgMode && aLoading) return <div>Loading apps…</div>;
-  if (!isOrgMode && aError)
-    return <div className="text-red-600">Error loading apps</div>;
+  if (uError) {
+    return (
+      <Sidebar collapsible="icon" {...sidebarProps}>
+        <SidebarContent>
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <div className="text-red-600 text-sm text-center">
+              Error loading user
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        </SidebarContent>
+      </Sidebar>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Sidebar collapsible="icon" {...sidebarProps}>
+        <SidebarContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-sm text-muted-foreground">
+              Not authenticated
+            </div>
+          </div>
+        </SidebarContent>
+      </Sidebar>
+    );
+  }
+
+  // Only show app loading states if we're actually trying to fetch apps
+  if (shouldShowApps && aLoading) {
+    return (
+      <Sidebar collapsible="icon" {...sidebarProps}>
+        <SidebarHeader>
+          <div className="p-4">
+            <SpinnerLoader text="Loading apps..." />
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <NavMain items={[]} />
+        </SidebarContent>
+        <SidebarFooter>
+          <NavUser
+            user={{
+              name: user.username,
+              email: user.email,
+              avatar: user.image || "",
+            }}
+          />
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
+
+  if (shouldShowApps && aError) {
+    return (
+      <Sidebar collapsible="icon" {...sidebarProps}>
+        <SidebarHeader>
+          <div className="p-4">
+            <div className="text-red-600 text-sm">Error loading apps</div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <NavMain items={[]} />
+        </SidebarContent>
+        <SidebarFooter>
+          <NavUser
+            user={{
+              name: user.username,
+              email: user.email,
+              avatar: user.image || "",
+            }}
+          />
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
+
+  // Ensure arrays are never null/undefined
+  const safeOrganizations = organizations || [];
+  // In app mode, we always want to show the apps for the dropdown
+  const safeApps = shouldShowApps ? apps || [] : [];
 
   const teams: Team[] =
     teamsOverride ??
     (isOrgMode
-      ? organizations.map((o) => ({
+      ? safeOrganizations.map((o) => ({
           id: o.id,
           name: o.name,
-          logo: SquareTerminal,
+          logo: o.imageUrl
+            ? () => (
+                <img
+                  src={o.imageUrl}
+                  alt={o.name}
+                  className="h-4 w-4 rounded"
+                />
+              )
+            : SquareTerminal,
         }))
-      : apps.map((a) => ({ id: a.id, name: a.name, logo: SquareTerminal })));
+      : safeApps.map((a) => ({
+          id: a.id,
+          name: a.name,
+          logo: SquareTerminal,
+        })));
 
   const activeId = isOrgMode ? orgId : appId;
 
@@ -89,22 +200,23 @@ export function AppSidebar({
     isOrgMode ? (
       <CreateOrgModal
         trigger={
-          <button className="flex w-full items-center gap-2 p-2 text-sm">
+          <div className="flex w-full items-center gap-2 p-2 text-sm cursor-pointer hover:bg-accent rounded-md">
             <Plus className="h-4 w-4 text-muted-foreground" />
             <span>Create organization</span>
-          </button>
+          </div>
         }
         onCreated={() => window.location.reload()}
       />
     ) : (
       <CreateAppModal
         trigger={
-          <button className="flex w-full items-center gap-2 p-2 text-sm">
+          <div className="flex w-full items-center gap-2 p-2 text-sm cursor-pointer hover:bg-accent rounded-md">
             <Plus className="h-4 w-4 text-muted-foreground" />
             <span>Create app</span>
-          </button>
+          </div>
         }
         onCreated={() => refetchApps()}
+        organizationId={orgId}
       />
     );
 
@@ -119,10 +231,10 @@ export function AppSidebar({
             isActive: pathname === `/dashboard/${orgId}`,
           },
           {
-            title: "Account",
-            url: "/account",
+            title: "Settings",
+            url: `/dashboard/${orgId}/settings`,
             icon: Settings2,
-            isActive: pathname === "/account",
+            isActive: pathname === `/dashboard/${orgId}/settings`,
           },
         ]
       : [
@@ -166,11 +278,10 @@ export function AppSidebar({
           user={{
             name: user.username,
             email: user.email,
-            avatar: user.image || "/user.png",
+            avatar: user.image || "",
           }}
         />
       </SidebarFooter>
-
       <SidebarRail />
     </Sidebar>
   );

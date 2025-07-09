@@ -24,26 +24,35 @@ function getOrgFromToken(token: string): string | undefined {
 
 export function middleware(req: NextRequest) {
   const token = req.cookies.get("token")?.value;
+  const pathname = req.nextUrl.pathname;
 
-  // Not logged in → force /login
-  if (!token && !["/login", "/signup"].includes(req.nextUrl.pathname)) {
+  // Allow invitation pages without authentication
+  const isInvitationPage = pathname.startsWith('/accept-org') || pathname.startsWith('/accept-invite');
+  const isPublicPage = ["/login", "/signup"].includes(pathname);
+
+  // Not logged in → force /login (except for public pages and invitation pages)
+  if (!token && !isPublicPage && !isInvitationPage) {
+    console.log('🔒 Middleware: Redirecting to login -', pathname);
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
   // Already logged in & hit /dashboard → send into your org
-  if (token) {
+  if (token && pathname === "/dashboard") {
     const orgId = getOrgFromToken(token);
     const dest = orgId ? `/dashboard/${orgId}` : "/dashboard";
+    console.log('🏠 Middleware: Redirecting to org dashboard -', dest);
     return NextResponse.redirect(new URL(dest, req.url));
   }
 
   // Prevent logged‐in users from visiting /login or /signup
-  if (token && ["/login", "/signup"].includes(req.nextUrl.pathname)) {
+  if (token && isPublicPage) {
     const orgId = getOrgFromToken(token);
     const dest = orgId ? `/dashboard/${orgId}` : "/dashboard";
+    console.log('🔒 Middleware: Already logged in, redirecting to dashboard -', dest);
     return NextResponse.redirect(new URL(dest, req.url));
   }
 
+  console.log('✅ Middleware: Allowing access to -', pathname);
   return NextResponse.next();
 }
 

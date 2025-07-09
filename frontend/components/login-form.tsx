@@ -11,23 +11,24 @@ import {
 import { AiOutlineEyeInvisible, AiOutlineEye } from "react-icons/ai";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useLogin, useSocialLogin } from "@/services/authService";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useAppStore } from "@/store/appStore";
 import { Theme } from "@/Theme/Theme";
+
+// Import new auth service
+import { useLogin, useSocialLogin } from "@/services/auth.service";
+import type { LoginInput } from "@/graphql/auth.mutations";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { login } = useLogin();
-  const { socialLogin } = useSocialLogin();
-  const setUser = useAppStore((state) => state.setUser);
-  const router = useRouter();
+  const { login, loading: loginLoading } = useLogin();
+  const { socialLogin, loading: socialLoginLoading } = useSocialLogin();
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  
   // State object for field errors
   const [errors, setErrors] = useState<{
     email?: string;
@@ -38,27 +39,16 @@ export function LoginForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({}); // reset previous errors
+    
     try {
-      const response = await login(email, password);
-      const me = response.data.login.user;
-      console.log("Login successful:", response.data.login);
-      const {
-        data: { login: result },
-      } = await login(email, password);
-      // console.log("Login successful:", result);
-      // Save tokens to localStorage or set in context
-      const { user, requirePasswordReset } = result;
-      if (requirePasswordReset) {
-        // you could stash the existing tokens in memory/localStorage if needed
-        return router.push("/change-password");
-      }
-      setUser({
-        id: user.id,
-        name: user.username,
-        email: user.email,
-        image: user.image,
-      });
-      router.push(`/dashboard/${me.organizationId}`);
+      const input: LoginInput = {
+        email,
+        password,
+        rememberMe: true, // Default to true for better UX
+      };
+      
+      await login(input);
+      // Navigation is handled in the login hook
     } catch (error: unknown) {
       if (error instanceof Error) {
         const errMsg = error.message;
@@ -71,7 +61,7 @@ export function LoginForm({
         // Check error message for known error types
         if (errMsg.toLowerCase().includes("password")) {
           fieldErrors.password = errMsg;
-        } else if (errMsg.toLowerCase().includes("not found")) {
+        } else if (errMsg.toLowerCase().includes("not found") || errMsg.toLowerCase().includes("email")) {
           fieldErrors.email = errMsg;
         } else {
           fieldErrors.general = errMsg;
@@ -80,6 +70,7 @@ export function LoginForm({
         console.error("Login error:", errMsg);
       } else {
         console.error("Login error:", error);
+        setErrors({ general: "An unexpected error occurred. Please try again." });
       }
     }
   };
@@ -93,33 +84,30 @@ export function LoginForm({
     ) {
       window.google.accounts.id.initialize({
         client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
-        callback: (response: { credential: string }) => {
-          const googleIdToken = response.credential;
-          console.log(googleIdToken);
+        callback: async (response: { credential: string }) => {
+          try {
+            const googleIdToken = response.credential;
+            console.log("Google ID Token received:", googleIdToken.substring(0, 20) + "...");
 
-          socialLogin("google", googleIdToken)
-            .then((res) => {
-              console.log("Google login successful:", res.data.socialLogin);
-              const userData = res.data.socialLogin;
-              setUser({
-                id: userData.user.id,
-                name: userData.user.username,
-                email: userData.user.email,
-                image: userData.image,
-              });
-              router.push(`/dashboard/${userData.user.organizationId}`);
-            })
-            .catch((err) => {
-              console.error("Google login error:", err);
+            await socialLogin("google", googleIdToken);
+            // Navigation is handled in the socialLogin hook
+          } catch (err) {
+            console.error("Google login error:", err);
+            setErrors({ 
+              general: err instanceof Error ? err.message : "Social login failed. Please try again." 
             });
+          }
         },
       });
       // Trigger the prompt to show the Google One Tap dialog
       window.google.accounts.id.prompt();
     } else {
       console.error("Google Identity Services not loaded");
+      setErrors({ general: "Google Sign-In is not available. Please try again." });
     }
   };
+
+  const isLoading = loginLoading || socialLoginLoading;
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -133,7 +121,7 @@ export function LoginForm({
         <CardContent>
           <div className="grid gap-6">
             <div className="flex flex-col gap-4">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" disabled={isLoading}>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                   <path
                     d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
@@ -146,6 +134,7 @@ export function LoginForm({
                 variant="outline"
                 className="w-full"
                 onClick={handleGoogleSignIn}
+                disabled={isLoading}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                   <path
@@ -153,7 +142,7 @@ export function LoginForm({
                     fill="currentColor"
                   />
                 </svg>
-                Login with Google
+                {socialLoginLoading ? "Signing in..." : "Login with Google"}
               </Button>
             </div>
             <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
@@ -176,6 +165,7 @@ export function LoginForm({
                     }}
                     placeholder="m@example.com"
                     required
+                    disabled={isLoading}
                   />
                   {errors.email && (
                     <p className="text-sm text-red-500">{errors.email}</p>
@@ -201,13 +191,14 @@ export function LoginForm({
                       if (errors.password)
                         setErrors((prev) => ({ ...prev, password: undefined }));
                     }}
+                    disabled={isLoading}
                   />
                   {errors.password && (
                     <p className="text-sm text-red-500">{errors.password}</p>
                   )}
                   <span
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute bottom-[0.6rem] right-2"
+                    className="absolute bottom-[0.6rem] right-2 cursor-pointer"
                   >
                     {showPassword ? (
                       <AiOutlineEyeInvisible color={Theme.colors.inactive} />
@@ -221,8 +212,8 @@ export function LoginForm({
                     {errors.general}
                   </p>
                 )}
-                <Button type="submit" className="w-full">
-                  Login
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {loginLoading ? "Signing in..." : "Login"}
                 </Button>
               </div>
               <div className="text-center text-sm">
