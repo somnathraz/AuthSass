@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourAuth SDK - Production Test</title>
+
+    <!-- Load the full production SDK -->
+    <script src="setauth-webflow.js"></script>
+
+    <!-- Google Identity Services for SSO -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <script>
+        // Initialize SDK with test configuration
+        window.YourAuthConfig = {
+            appId: 'test_app_secret_key_123',
+            apiUrl: 'http://localhost:4000', // Your local backend
+            debug: true // Enable debug mode for testing
+        };
+    </script>
+</head>
+
+<body
+    style="background: #f5f5f5; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+
+    <h1 style="text-align: center; margin-bottom: 40px; color: #333;">YourAuth SDK - Production Test</h1>
+
+    <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+
+        <!-- Login Form Test -->
+        <div>
+            <h2 style="text-align: center; margin-bottom: 20px; color: #333;">Login Form (Production)</h2>
+            <div id="login-container"></div>
+        </div>
+
+        <!-- Signup Form Test -->
+        <div>
+            <h2 style="text-align: center; margin-bottom: 20px; color: #333;">Signup Form (Production)</h2>
+            <div id="signup-container"></div>
+        </div>
+
+    </div>
+
+    <!-- Test Controls -->
+    <div
+        style="text-align: center; margin-top: 40px; padding: 20px; background: white; border-radius: 8px; max-width: 800px; margin-left: auto; margin-right: auto;">
+        <h3>Test Controls</h3>
+
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
+
+            <!-- Auth Status -->
+            <div style="padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h4>Auth Status</h4>
+                <div id="auth-status">Checking...</div>
+                <button onclick="checkAuthStatus()"
+                    style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Check Status
+                </button>
+            </div>
+
+            <!-- User Info -->
+            <div style="padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h4>User Info</h4>
+                <div id="user-info">Not logged in</div>
+                <button onclick="getUserInfo()"
+                    style="margin-top: 10px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Get User
+                </button>
+            </div>
+
+            <!-- Logout -->
+            <div style="padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h4>Logout</h4>
+                <button onclick="logoutUser()"
+                    style="padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Logout
+                </button>
+            </div>
+
+            <!-- Clear Storage -->
+            <div style="padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h4>Clear Storage</h4>
+                <button onclick="clearStorage()"
+                    style="padding: 8px 16px; background: #ffc107; color: #212529; border: none; border-radius: 4px; cursor: pointer;">
+                    Clear All
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Event Log -->
+        <div style="margin-top: 30px; text-align: left;">
+            <h4>Event Log</h4>
+            <div id="event-log"
+                style="background: #f8f9fa; padding: 15px; border-radius: 6px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px;">
+                <div>Waiting for events...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Wait for SDK to initialize
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.YourAuthSDK) {
+                // Render both forms
+                window.YourAuthSDK.renderLoginForm(document.getElementById('login-container'));
+                window.YourAuthSDK.renderSignupForm(document.getElementById('signup-container'));
+
+                console.log('✅ YourAuth SDK initialized successfully!');
+                logEvent('SDK Initialized', 'Production SDK loaded and forms rendered');
+
+                // Set up event listeners
+                setupEventListeners();
+
+                // Check initial auth status
+                setTimeout(checkAuthStatus, 1000);
+
+            } else {
+                console.error('❌ YourAuth SDK not initialized');
+                logEvent('ERROR', 'SDK failed to initialize');
+            }
+        });
+
+        // Set up event listeners for auth events
+        function setupEventListeners() {
+            // Listen for login events
+            document.addEventListener('yourauth:login', (event) => {
+                const { user, token } = event.detail;
+                logEvent('LOGIN SUCCESS', `User: ${user?.email || 'Unknown'}`);
+                checkAuthStatus();
+            });
+
+            // Listen for logout events
+            document.addEventListener('yourauth:logout', () => {
+                logEvent('LOGOUT', 'User logged out');
+                checkAuthStatus();
+            });
+
+            // Listen for form submissions
+            document.addEventListener('submit', (e) => {
+                if (e.target.classList.contains('yourauth-form')) {
+                    logEvent('FORM SUBMIT', `Form type: ${e.target.dataset.type}`);
+                }
+            });
+        }
+
+        // Check authentication status
+        function checkAuthStatus() {
+            const isAuth = window.YourAuthSDK?.isAuthenticated();
+            const statusDiv = document.getElementById('auth-status');
+
+            if (isAuth) {
+                statusDiv.innerHTML = '<span style="color: #28a745;">✅ Authenticated</span>';
+            } else {
+                statusDiv.innerHTML = '<span style="color: #dc3545;">❌ Not Authenticated</span>';
+            }
+
+            logEvent('AUTH CHECK', isAuth ? 'User is authenticated' : 'User is not authenticated');
+        }
+
+        // Get user information
+        function getUserInfo() {
+            const user = window.YourAuthSDK?.getCurrentUser();
+            const userDiv = document.getElementById('user-info');
+
+            if (user) {
+                userDiv.innerHTML = `
+                    <div style="font-size: 12px; text-align: left;">
+                        <strong>Email:</strong> ${user.email || 'N/A'}<br>
+                        <strong>User ID:</strong> ${user.userId || 'N/A'}<br>
+                        <strong>Expires:</strong> ${new Date(user.exp * 1000).toLocaleString()}
+                    </div>
+                `;
+                logEvent('USER INFO', `Retrieved user: ${user.email || 'Unknown'}`);
+            } else {
+                userDiv.innerHTML = '<span style="color: #dc3545;">No user data</span>';
+                logEvent('USER INFO', 'No user data available');
+            }
+        }
+
+        // Logout user
+        function logoutUser() {
+            if (window.YourAuthSDK) {
+                window.YourAuthSDK.logout();
+                logEvent('LOGOUT', 'Manual logout triggered');
+            }
+        }
+
+        // Clear all storage
+        function clearStorage() {
+            localStorage.removeItem('yourauth_token');
+            localStorage.removeItem('yourauth_refresh_token');
+            logEvent('STORAGE', 'All auth data cleared');
+            checkAuthStatus();
+        }
+
+        // Log events to the UI
+        function logEvent(type, message) {
+            const logDiv = document.getElementById('event-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #6c757d;">[${timestamp}]</span> <strong>${type}:</strong> ${message}`;
+
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+
+            // Keep only last 20 entries
+            while (logDiv.children.length > 20) {
+                logDiv.removeChild(logDiv.firstChild);
+            }
+        }
+
+        // Test backend connectivity
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:4000/sdk/health');
+                const result = await response.json();
+                logEvent('BACKEND TEST', result.success ? '✅ Backend connected' : '❌ Backend error');
+            } catch (error) {
+                logEvent('BACKEND TEST', `❌ Connection failed: ${error.message}`);
+            }
+        }
+
+        // Test backend on page load
+        setTimeout(testBackend, 2000);
+
+    </script>
+
+</body>
+
+</html>
