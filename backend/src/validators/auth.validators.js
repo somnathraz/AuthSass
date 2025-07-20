@@ -124,6 +124,17 @@ const passwordResetRequestSchema = Joi.object({
     })
 }).options({ stripUnknown: true });
 
+// Magic link request validation schema
+const magicLinkRequestSchema = Joi.object({
+  email: emailSchema,
+  redirectUri: Joi.string()
+    .uri()
+    .allow('')
+    .messages({
+      'string.uri': 'Invalid redirect URI'
+    })
+}).options({ stripUnknown: true });
+
 // Password reset validation schema
 const passwordResetSchema = Joi.object({
   token: Joi.string()
@@ -305,6 +316,7 @@ module.exports = {
   passwordResetRequestSchema,
   passwordResetSchema,
   changePasswordSchema,
+  magicLinkRequestSchema,
   emailVerificationSchema,
   tokenValidationSchema,
   refreshTokenSchema,

@@ -263,6 +263,38 @@ class TokenService {
   }
 
   /**
+   * Generate magic link login token
+   * @param {string} userId - User ID
+   * @returns {Promise<string>} - Magic link token
+   */
+  async generateMagicLinkToken(userId) {
+    const payload = {
+      userId,
+      type: 'magic_link',
+      purpose: 'MAGIC_LINK_LOGIN'
+    };
+
+    return jwt.sign(
+      payload,
+      this.getAccessTokenSecret(),
+      {
+        expiresIn: '15m',
+        issuer: 'auth-saas',
+        audience: 'auth-saas-client'
+      }
+    );
+  }
+
+  /**
+   * Verify magic link token
+   * @param {string} token - Token to verify
+   * @returns {Promise<Object>} - Decoded token
+   */
+  async verifyMagicLinkToken(token) {
+    return this.verifySpecialToken(token, 'magic_link');
+  }
+
+  /**
    * Verify special purpose token (verification, reset, etc.)
    * @param {string} token - Token to verify
    * @param {string} expectedType - Expected token type
