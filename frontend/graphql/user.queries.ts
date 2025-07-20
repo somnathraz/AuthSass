@@ -2,7 +2,7 @@ import { gql } from "@apollo/client";
 
 /**
  * User Management Queries
- * 
+ *
  * All queries use the working backend resolvers from our comprehensive testing.
  * These are verified to work with the current backend implementation.
  */
@@ -560,4 +560,4 @@ export interface OrganizationPermissions {
   canCreateApps: boolean;
   canInviteMembers: boolean;
   canManageSettings: boolean;
-} 
+}

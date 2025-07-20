@@ -116,6 +116,8 @@ interface AppData {
     memberCount: number;
     userRole?: string;
     createdAt: string;
+    brandingSettings?: { customLogo?: string };
+    generalSettings?: { logoUrl?: string };
   }>;
 }
 interface AppVars {
@@ -167,6 +169,8 @@ export type FetchAppItem = {
   status: "joined" | "pending";
   createdAt: string;
   used: boolean; // ← this is required
+  brandingSettings?: { customLogo?: string };
+  generalSettings?: { logoUrl?: string };
 };
 interface AppInvite {
   id: string;
@@ -429,17 +433,20 @@ export function useUserAndOrg() {
     error: errorMe,
   } = useQuery<MeQuery>(GET_ME);
 
-  const {
-    data: orgsData,
-    loading: loadingOrgs,
-    error: errorOrgs,
-  } = useQuery<UserOrgsQuery>(GET_USER_ORGANIZATIONS);
+  const { data, loading, error, refetch } = useQuery<UserOrgsQuery>(
+    GET_USER_ORGANIZATIONS
+  );
 
   return {
     user: meData?.me,
-    organizations: orgsData?.userOrganizations ?? [],
-    loading: loadingMe || loadingOrgs,
-    error: errorMe || errorOrgs,
+    organizations:
+      data?.userOrganizations?.map((o) => ({
+        ...o,
+        imageUrl: o.imageUrl || "", // Always provide imageUrl for sidebar mapping
+      })) || [],
+    loading,
+    error,
+    refetch,
   };
 }
 export const useCreateOrg = () => {
@@ -632,27 +639,16 @@ export function useFetchApp(orgId: string) {
     refetch: refetchInvites,
   } = useQuery<MyInvitationsQuery>(GET_MY_INVITATIONS);
 
-  // Handle invalid orgId after hooks are called
-  if (!orgId || typeof orgId !== "string" || orgId.trim().length === 0) {
-    return {
-      apps: [],
-      loading: false,
-      error: null,
-      refetch: () => {},
-    };
-  }
+  // Always call hooks first, then handle early return
 
   const joined = React.useMemo<FetchAppItem[]>(() => {
-    // Early return if no data or orgId
     if (!appsData?.myApps || !orgId) {
       return [];
     }
-
     try {
       return (
         appsData.myApps
           ?.filter((a) => {
-            // Comprehensive null checks
             if (!a || typeof a !== "object") return false;
             if (!a.organizationId || typeof a.organizationId !== "string")
               return false;
@@ -667,6 +663,14 @@ export function useFetchApp(orgId: string) {
             status: "joined",
             used: true,
             createdAt: a.createdAt,
+            brandingSettings:
+              "brandingSettings" in a
+                ? (a.brandingSettings as { customLogo?: string } | undefined)
+                : undefined,
+            generalSettings:
+              "generalSettings" in a
+                ? (a.generalSettings as { logoUrl?: string } | undefined)
+                : undefined,
           })) ?? []
       );
     } catch (error) {
@@ -676,16 +680,13 @@ export function useFetchApp(orgId: string) {
   }, [appsData, orgId]);
 
   const pending = React.useMemo<FetchAppItem[]>(() => {
-    // Early return if no data or orgId
     if (!invData?.myInvitations || !orgId) {
       return [];
     }
-
     try {
       return (
         invData.myInvitations
           ?.filter((i) => {
-            // Comprehensive null checks
             if (!i || typeof i !== "object") return false;
             if (!i.app || typeof i.app !== "object") return false;
             if (
@@ -704,6 +705,16 @@ export function useFetchApp(orgId: string) {
             status: i.status === "ACCEPTED" ? "joined" : "pending",
             createdAt: i.createdAt,
             used: i.status === "ACCEPTED",
+            brandingSettings:
+              i.app && "brandingSettings" in i.app
+                ? (i.app.brandingSettings as
+                    | { customLogo?: string }
+                    | undefined)
+                : undefined,
+            generalSettings:
+              i.app && "generalSettings" in i.app
+                ? (i.app.generalSettings as { logoUrl?: string } | undefined)
+                : undefined,
           })) ?? []
       );
     } catch (error) {
@@ -715,8 +726,6 @@ export function useFetchApp(orgId: string) {
   const apps = React.useMemo(() => {
     try {
       const map = new Map<string, FetchAppItem>();
-
-      // Insert joined first (higher priority)
       if (Array.isArray(joined)) {
         joined.forEach((app) => {
           if (app && app.id) {
@@ -724,8 +733,6 @@ export function useFetchApp(orgId: string) {
           }
         });
       }
-
-      // Insert pending only if not already joined
       if (Array.isArray(pending)) {
         pending.forEach((app) => {
           if (app && app.id && !map.has(app.id)) {
@@ -733,7 +740,6 @@ export function useFetchApp(orgId: string) {
           }
         });
       }
-
       return Array.from(map.values());
     } catch (error) {
       console.error("Error in useFetchApp apps merge:", error);
@@ -751,6 +757,16 @@ export function useFetchApp(orgId: string) {
       console.error("Error in useFetchApp refetch:", error);
     }
   };
+
+  // Now handle early return after all hooks
+  if (!orgId || typeof orgId !== "string" || orgId.trim().length === 0) {
+    return {
+      apps: [],
+      loading: false,
+      error: null,
+      refetch: () => {},
+    };
+  }
 
   return { apps, loading, error, refetch };
 }

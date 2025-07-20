@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import { ChevronsUpDown } from "lucide-react";
+import Image from "next/image";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,7 +22,7 @@ import {
 export type Team = {
   id: string;
   name: string;
-  logo: React.ElementType;
+  logo: string | React.ElementType; // Accepts image URL or icon component
   plan?: string;
 };
 
@@ -50,6 +51,25 @@ export function TeamSwitcher({
 
   if (!activeTeam) return null;
 
+  // Helper to render logo (image or icon)
+  const renderLogo = (logo: string | React.ElementType, alt: string) => {
+    if (typeof logo === "string" && logo) {
+      return (
+        <Image
+          src={logo}
+          alt={alt}
+          width={16}
+          height={16}
+          className="size-4 rounded object-cover bg-white"
+        />
+      );
+    } else if (typeof logo === "function") {
+      const Icon = logo;
+      return <Icon className="size-4" />;
+    }
+    return null;
+  };
+  console.log(activeTeam, "activeTeam.logo");
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -60,7 +80,7 @@ export function TeamSwitcher({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <activeTeam.logo className="size-4" />
+                {renderLogo(activeTeam.logo, activeTeam.name)}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{activeTeam.name}</span>
@@ -92,7 +112,7 @@ export function TeamSwitcher({
                 className="flex items-center justify-between gap-2 p-2"
               >
                 <div className="flex items-center gap-2">
-                  <team.logo className="h-4 w-4" />
+                  {renderLogo(team.logo, team.name)}
                   <span className="truncate text-sm">{team.name}</span>
                 </div>
               </DropdownMenuItem>

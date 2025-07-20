@@ -165,30 +165,45 @@ export function AppSidebar({
   // Ensure arrays are never null/undefined
   const safeOrganizations = organizations || [];
   // In app mode, we always want to show the apps for the dropdown
+  safeOrganizations.forEach((org, idx) => {
+    console.log(`[Org ${idx}] name:`, org.name);
+    console.log(`[Org ${idx}] imageUrl:`, org.imageUrl);
+    console.log(`[Org ${idx}] logo fallback used:`, !org.imageUrl);
+  });
   const safeApps = shouldShowApps ? apps || [] : [];
+  safeApps.forEach((app, idx) => {
+    console.log(`[App ${idx}] name:`, app);
+  });
+  console.log(isOrgMode, teamsOverride, "isOrgMode");
 
   const teams: Team[] =
     teamsOverride ??
     (isOrgMode
-      ? safeOrganizations.map((o) => ({
-          id: o.id,
-          name: o.name,
-          logo: o.imageUrl
-            ? () => (
-                <img
-                  src={o.imageUrl}
-                  alt={o.name}
-                  className="h-4 w-4 rounded"
-                />
-              )
-            : SquareTerminal,
-        }))
+      ? safeOrganizations.map((o, i) => {
+          const useFallback = !o.imageUrl;
+          console.log(`[TeamMap ${i}] name: ${o.name}`);
+          console.log(`[TeamMap ${i}] imageUrl:`, o.imageUrl);
+          console.log(`[TeamMap ${i}] logo fallback used:`, useFallback);
+          console.log(o.imageUrl, "o.imageUrl");
+          return {
+            id: o.id,
+            name: o.name,
+            logo: o.imageUrl || SquareTerminal,
+          };
+        })
       : safeApps.map((a) => ({
           id: a.id,
           name: a.name,
-          logo: SquareTerminal,
+          logo:
+            a.brandingSettings?.customLogo ||
+            a.generalSettings?.logoUrl ||
+            SquareTerminal,
         })));
-
+  teams.forEach((team, idx) => {
+    console.log(`[Team ${idx}] name:`, team.name);
+    console.log(`[Team ${idx}] logo:`, team.logo);
+    console.log(`[Team ${idx}] logo typeof:`, typeof team.logo);
+  });
   const activeId = isOrgMode ? orgId : appId;
 
   const onSelect = (newId: string) =>
@@ -238,6 +253,12 @@ export function AppSidebar({
           },
         ]
       : [
+          {
+            title: "Apps",
+            url: `/dashboard/${orgId}/app/${appId}`,
+            icon: SquareTerminal,
+            isActive: pathname === `/dashboard/${orgId}/app/${appId}`,
+          },
           {
             title: "Users",
             url: `/dashboard/${orgId}/app/${appId}/users`,

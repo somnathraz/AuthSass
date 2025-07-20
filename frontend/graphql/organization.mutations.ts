@@ -2,7 +2,7 @@ import { gql } from "@apollo/client";
 
 /**
  * Organization Management Mutations
- * 
+ *
  * All mutations use the working backend resolvers from our comprehensive testing.
  * These are verified to work with the current backend implementation.
  */
@@ -336,7 +336,10 @@ export interface Error {
 }
 
 export const UPDATE_ORGANIZATION_SETTINGS = gql`
-  mutation UpdateOrganizationSettings($id: ID!, $input: UpdateOrganizationSettingsInput!) {
+  mutation UpdateOrganizationSettings(
+    $id: ID!
+    $input: UpdateOrganizationSettingsInput!
+  ) {
     updateOrganizationSettings(id: $id, input: $input) {
       success
       organization {
@@ -345,6 +348,7 @@ export const UPDATE_ORGANIZATION_SETTINGS = gql`
         slug
         description
         website
+        imageUrl
         supportEmail
         timezone
         contactName
@@ -433,7 +437,10 @@ export const UPDATE_BRANDING_SETTINGS = gql`
 `;
 
 export const UPDATE_NOTIFICATION_SETTINGS = gql`
-  mutation UpdateNotificationSettings($id: ID!, $input: NotificationSettingsInput!) {
+  mutation UpdateNotificationSettings(
+    $id: ID!
+    $input: NotificationSettingsInput!
+  ) {
     updateNotificationSettings(id: $id, input: $input) {
       success
       organization {
@@ -484,6 +491,7 @@ export const GET_ORGANIZATION_SETTINGS = gql`
       slug
       description
       website
+      imageUrl
       supportEmail
       timezone
       contactName
@@ -530,4 +538,4 @@ export const GET_ORGANIZATION_SETTINGS = gql`
       updatedAt
     }
   }
-`; 
+`;

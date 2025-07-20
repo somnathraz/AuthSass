@@ -12,12 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -81,7 +76,14 @@ import {
 // Form schemas for different sections
 const generalSettingsSchema = z.object({
   name: z.string().min(1, "Organization name is required").max(100),
-  slug: z.string().min(1, "Slug is required").regex(/^[a-zA-Z0-9-]+$/, "Slug can only contain letters, numbers, and hyphens").optional(),
+  slug: z
+    .string()
+    .min(1, "Slug is required")
+    .regex(
+      /^[a-zA-Z0-9-]+$/,
+      "Slug can only contain letters, numbers, and hyphens"
+    )
+    .optional(),
   description: z.string().max(500).optional(),
   website: z.string().url().optional().or(z.literal("")),
   supportEmail: z.string().email().optional().or(z.literal("")),
@@ -137,7 +139,7 @@ const notificationSettingsSchema = z.object({
 const analyticsSettingsSchema = z.object({
   enableTracking: z.boolean(),
   retentionPeriod: z.number().min(1).max(365),
-  exportFormat: z.enum(['JSON', 'CSV']),
+  exportFormat: z.enum(["JSON", "CSV"]),
 });
 
 type GeneralSettings = z.infer<typeof generalSettingsSchema>;
@@ -150,18 +152,27 @@ type AnalyticsSettingsForm = z.infer<typeof analyticsSettingsSchema>;
 export default function OrganizationSettingsPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const [activeTab, setActiveTab] = useState("general");
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // Load organization data
-  const { organization, loading, error, refetch } = useOrganizationSettings(orgId);
+  const { organization, loading, error, refetch } =
+    useOrganizationSettings(orgId);
 
   // Service hooks
-  const { updateSettings: updateOrgSettings, loading: updatingGeneral } = useUpdateOrganizationSettings();
+  const { updateSettings: updateOrgSettings, loading: updatingGeneral } =
+    useUpdateOrganizationSettings();
   const { updatePolicy, loading: updatingPassword } = useUpdatePasswordPolicy();
-  const { updateDomainSettings, loading: updatingDomain } = useUpdateDomainSettings();
-  const { updateBrandingSettings, loading: updatingBranding } = useUpdateBrandingSettings();
-  const { updateNotificationSettings, loading: updatingNotifications } = useUpdateNotificationSettings();
-  const { updateAnalyticsSettings, loading: updatingAnalytics } = useUpdateAnalyticsSettings();
+  const { updateDomainSettings, loading: updatingDomain } =
+    useUpdateDomainSettings();
+  const { updateBrandingSettings, loading: updatingBranding } =
+    useUpdateBrandingSettings();
+  const { updateNotificationSettings, loading: updatingNotifications } =
+    useUpdateNotificationSettings();
+  const { updateAnalyticsSettings, loading: updatingAnalytics } =
+    useUpdateAnalyticsSettings();
 
   // Form hooks for different sections
   const generalForm = useForm<GeneralSettings>({
@@ -239,7 +250,7 @@ export default function OrganizationSettingsPage() {
     defaultValues: {
       enableTracking: true,
       retentionPeriod: 90,
-      exportFormat: 'JSON',
+      exportFormat: "JSON",
     },
   });
 
@@ -268,11 +279,15 @@ export default function OrganizationSettingsPage() {
       // Domain settings
       if (organization.domainSettings) {
         domainForm.reset({
-          allowedCallbackUrls: organization.domainSettings.allowedCallbackUrls?.join('\n') || "",
-          allowedLogoutUrls: organization.domainSettings.allowedLogoutUrls?.join('\n') || "",
-          allowedWebOrigins: organization.domainSettings.allowedWebOrigins?.join('\n') || "",
+          allowedCallbackUrls:
+            organization.domainSettings.allowedCallbackUrls?.join("\n") || "",
+          allowedLogoutUrls:
+            organization.domainSettings.allowedLogoutUrls?.join("\n") || "",
+          allowedWebOrigins:
+            organization.domainSettings.allowedWebOrigins?.join("\n") || "",
           customDomain: organization.domainSettings.customDomain || "",
-          sdkAllowedDomains: organization.domainSettings.sdkAllowedDomains?.join('\n') || "",
+          sdkAllowedDomains:
+            organization.domainSettings.sdkAllowedDomains?.join("\n") || "",
           enableCORS: organization.domainSettings.enableCORS || false,
           corsMaxAge: organization.domainSettings.corsMaxAge || 0,
         });
@@ -293,10 +308,18 @@ export default function OrganizationSettingsPage() {
         analyticsForm.reset(organization.analytics);
       }
     }
-  }, [organization, generalForm, passwordForm, domainForm, brandingForm, notificationForm, analyticsForm]);
+  }, [
+    organization,
+    generalForm,
+    passwordForm,
+    domainForm,
+    brandingForm,
+    notificationForm,
+    analyticsForm,
+  ]);
 
   // Show success/error messages
-  const showMessage = (type: 'success' | 'error', message: string) => {
+  const showMessage = (type: "success" | "error", message: string) => {
     setSaveMessage({ type, message });
     setTimeout(() => setSaveMessage(null), 5000);
   };
@@ -306,14 +329,17 @@ export default function OrganizationSettingsPage() {
     try {
       const result = await updateOrgSettings(orgId, data);
       if (result.success) {
-        showMessage('success', 'General settings saved successfully!');
+        showMessage("success", "General settings saved successfully!");
         refetch(); // Refresh the data
       } else {
-        showMessage('error', result.errors?.[0]?.message || 'Failed to save settings');
+        showMessage(
+          "error",
+          result.errors?.[0]?.message || "Failed to save settings"
+        );
       }
     } catch (error) {
-      console.error('Failed to save general settings:', error);
-      showMessage('error', 'Failed to save general settings');
+      console.error("Failed to save general settings:", error);
+      showMessage("error", "Failed to save general settings");
     }
   };
 
@@ -321,39 +347,53 @@ export default function OrganizationSettingsPage() {
     try {
       const result = await updatePolicy(orgId, data);
       if (result.success) {
-        showMessage('success', 'Password policy saved successfully!');
+        showMessage("success", "Password policy saved successfully!");
         refetch();
       } else {
-        showMessage('error', result.errors?.[0]?.message || 'Failed to save password policy');
+        showMessage(
+          "error",
+          result.errors?.[0]?.message || "Failed to save password policy"
+        );
       }
     } catch (error) {
-      console.error('Failed to save password policy:', error);
-      showMessage('error', 'Failed to save password policy');
+      console.error("Failed to save password policy:", error);
+      showMessage("error", "Failed to save password policy");
     }
   };
 
   const saveDomainSettings = async (data: DomainSettingsForm) => {
     try {
       const domainData = {
-        allowedCallbackUrls: data.allowedCallbackUrls.split('\n').filter(url => url.trim()),
-        allowedLogoutUrls: data.allowedLogoutUrls.split('\n').filter(url => url.trim()),
-        allowedWebOrigins: data.allowedWebOrigins.split('\n').filter(url => url.trim()),
+        allowedCallbackUrls: data.allowedCallbackUrls
+          .split("\n")
+          .filter((url) => url.trim()),
+        allowedLogoutUrls: data.allowedLogoutUrls
+          .split("\n")
+          .filter((url) => url.trim()),
+        allowedWebOrigins: data.allowedWebOrigins
+          .split("\n")
+          .filter((url) => url.trim()),
         customDomain: data.customDomain,
-        sdkAllowedDomains: data.sdkAllowedDomains ? data.sdkAllowedDomains.split('\n').filter(url => url.trim()) : [],
+        sdkAllowedDomains: data.sdkAllowedDomains
+          ? data.sdkAllowedDomains.split("\n").filter((url) => url.trim())
+          : [],
         enableCORS: data.enableCORS,
         corsMaxAge: data.corsMaxAge,
       };
 
       const result = await updateDomainSettings(orgId, domainData);
       if (result.success) {
-        showMessage('success', 'Domain settings saved successfully!');
+        showMessage("success", "Domain settings saved successfully!");
         refetch();
       } else {
-        showMessage('error', result.errors?.[0]?.message || 'Failed to save domain settings');
+        showMessage(
+          "error",
+          result.errors?.[0]?.message || "Failed to save domain settings"
+        );
       }
     } catch (error) {
-      console.error('Failed to save domain settings:', error);
-      showMessage('error', 'Failed to save domain settings');
+      console.error("Failed to save domain settings:", error);
+      showMessage("error", "Failed to save domain settings");
     }
   };
 
@@ -361,14 +401,17 @@ export default function OrganizationSettingsPage() {
     try {
       const result = await updateBrandingSettings(orgId, data);
       if (result.success) {
-        showMessage('success', 'Branding settings saved successfully!');
+        showMessage("success", "Branding settings saved successfully!");
         refetch();
       } else {
-        showMessage('error', result.errors?.[0]?.message || 'Failed to save branding settings');
+        showMessage(
+          "error",
+          result.errors?.[0]?.message || "Failed to save branding settings"
+        );
       }
     } catch (error) {
-      console.error('Failed to save branding settings:', error);
-      showMessage('error', 'Failed to save branding settings');
+      console.error("Failed to save branding settings:", error);
+      showMessage("error", "Failed to save branding settings");
     }
   };
 
@@ -376,14 +419,17 @@ export default function OrganizationSettingsPage() {
     try {
       const result = await updateNotificationSettings(orgId, data);
       if (result.success) {
-        showMessage('success', 'Notification settings saved successfully!');
+        showMessage("success", "Notification settings saved successfully!");
         refetch();
       } else {
-        showMessage('error', result.errors?.[0]?.message || 'Failed to save notification settings');
+        showMessage(
+          "error",
+          result.errors?.[0]?.message || "Failed to save notification settings"
+        );
       }
     } catch (error) {
-      console.error('Failed to save notification settings:', error);
-      showMessage('error', 'Failed to save notification settings');
+      console.error("Failed to save notification settings:", error);
+      showMessage("error", "Failed to save notification settings");
     }
   };
 
@@ -391,21 +437,24 @@ export default function OrganizationSettingsPage() {
     try {
       const result = await updateAnalyticsSettings(orgId, data);
       if (result.success) {
-        showMessage('success', 'Analytics settings saved successfully!');
+        showMessage("success", "Analytics settings saved successfully!");
         refetch();
       } else {
-        showMessage('error', result.errors?.[0]?.message || 'Failed to save analytics settings');
+        showMessage(
+          "error",
+          result.errors?.[0]?.message || "Failed to save analytics settings"
+        );
       }
     } catch (error) {
-      console.error('Failed to save analytics settings:', error);
-      showMessage('error', 'Failed to save analytics settings');
+      console.error("Failed to save analytics settings:", error);
+      showMessage("error", "Failed to save analytics settings");
     }
   };
 
   if (loading) {
     return (
-      <PageLoader 
-        title="Loading Organization Settings..." 
+      <PageLoader
+        title="Loading Organization Settings..."
         description="Please wait while we load your organization settings"
       />
     );
@@ -436,17 +485,23 @@ export default function OrganizationSettingsPage() {
       <div className="mb-6">
         <div className="flex items-center space-x-4 mb-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/dashboard/${orgId}`} className="flex items-center space-x-2">
+            <Link
+              href={`/dashboard/${orgId}`}
+              className="flex items-center space-x-2"
+            >
               <ArrowLeft className="h-4 w-4" />
               <span>Back to Dashboard</span>
             </Link>
           </Button>
         </div>
-        
+
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href={`/dashboard/${orgId}`} className="flex items-center space-x-1">
+              <BreadcrumbLink
+                href={`/dashboard/${orgId}`}
+                className="flex items-center space-x-1"
+              >
                 <Home className="h-4 w-4" />
                 <span>Dashboard</span>
               </BreadcrumbLink>
@@ -472,20 +527,34 @@ export default function OrganizationSettingsPage() {
 
       {/* Save Message */}
       {saveMessage && (
-        <Alert className={saveMessage.type === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
-          {saveMessage.type === 'success' ? (
+        <Alert
+          className={
+            saveMessage.type === "success"
+              ? "border-green-200 bg-green-50"
+              : "border-red-200 bg-red-50"
+          }
+        >
+          {saveMessage.type === "success" ? (
             <CheckCircle className="h-4 w-4 text-green-600" />
           ) : (
             <AlertCircle className="h-4 w-4 text-red-600" />
           )}
-          <AlertDescription className={saveMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}>
+          <AlertDescription
+            className={
+              saveMessage.type === "success" ? "text-green-800" : "text-red-800"
+            }
+          >
             {saveMessage.message}
           </AlertDescription>
         </Alert>
       )}
 
       {/* Settings Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-6"
+      >
         <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
@@ -503,7 +572,10 @@ export default function OrganizationSettingsPage() {
             <Palette className="h-4 w-4" />
             Branding
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
+          <TabsTrigger
+            value="notifications"
+            className="flex items-center gap-2"
+          >
             <Bell className="h-4 w-4" />
             Notifications
           </TabsTrigger>
@@ -531,16 +603,24 @@ export default function OrganizationSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={generalForm.handleSubmit(saveGeneralSettings)} className="space-y-6">
+              <form
+                onSubmit={generalForm.handleSubmit(saveGeneralSettings)}
+                className="space-y-6"
+              >
                 {/* Organization Logo Section */}
                 <div className="space-y-4">
                   <Label htmlFor="logo">Organization Logo</Label>
                   <div className="flex items-center space-x-4">
                     <div className="relative">
-                      {generalForm.watch("imageUrl") ? (
+                      {generalForm.watch("imageUrl") ||
+                      organization?.imageUrl ? (
                         <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
                           <img
-                            src={generalForm.watch("imageUrl")}
+                            src={
+                              generalForm.watch("imageUrl") ||
+                              organization?.imageUrl ||
+                              ""
+                            }
                             alt="Organization logo"
                             className="w-full h-full object-cover"
                           />
@@ -564,19 +644,37 @@ export default function OrganizationSettingsPage() {
                           <Upload className="h-4 w-4 mr-2" />
                           Upload Logo
                         </Button>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
+                        <Button
+                          type="button"
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             // Default organization icons
                             const defaultIcons = [
-                              "https://ui-avatars.com/api/?name=" + encodeURIComponent(generalForm.watch("name") || "Org") + "&background=4F46E5&color=fff&size=200",
-                              "https://api.dicebear.com/7.x/shapes/svg?seed=" + encodeURIComponent(generalForm.watch("name") || "org"),
-                              "https://api.dicebear.com/7.x/bottts/svg?seed=" + encodeURIComponent(generalForm.watch("name") || "org"),
-                              "https://api.dicebear.com/7.x/identicon/svg?seed=" + encodeURIComponent(generalForm.watch("name") || "org")
+                              "https://ui-avatars.com/api/?name=" +
+                                encodeURIComponent(
+                                  generalForm.watch("name") || "Org"
+                                ) +
+                                "&background=4F46E5&color=fff&size=200",
+                              "https://api.dicebear.com/7.x/shapes/svg?seed=" +
+                                encodeURIComponent(
+                                  generalForm.watch("name") || "org"
+                                ),
+                              "https://api.dicebear.com/7.x/bottts/svg?seed=" +
+                                encodeURIComponent(
+                                  generalForm.watch("name") || "org"
+                                ),
+                              "https://api.dicebear.com/7.x/identicon/svg?seed=" +
+                                encodeURIComponent(
+                                  generalForm.watch("name") || "org"
+                                ),
                             ];
-                            generalForm.setValue("imageUrl", defaultIcons[Math.floor(Math.random() * defaultIcons.length)]);
+                            generalForm.setValue(
+                              "imageUrl",
+                              defaultIcons[
+                                Math.floor(Math.random() * defaultIcons.length)
+                              ]
+                            );
                           }}
                         >
                           <Settings className="h-4 w-4 mr-2" />
@@ -660,19 +758,29 @@ export default function OrganizationSettingsPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
-                  <Select 
-                    value={generalForm.watch("timezone")} 
-                    onValueChange={(value) => generalForm.setValue("timezone", value)}
+                  <Select
+                    value={generalForm.watch("timezone")}
+                    onValueChange={(value) =>
+                      generalForm.setValue("timezone", value)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select timezone" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="UTC">UTC</SelectItem>
-                      <SelectItem value="America/New_York">Eastern Time</SelectItem>
-                      <SelectItem value="America/Chicago">Central Time</SelectItem>
-                      <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                      <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                      <SelectItem value="America/New_York">
+                        Eastern Time
+                      </SelectItem>
+                      <SelectItem value="America/Chicago">
+                        Central Time
+                      </SelectItem>
+                      <SelectItem value="America/Denver">
+                        Mountain Time
+                      </SelectItem>
+                      <SelectItem value="America/Los_Angeles">
+                        Pacific Time
+                      </SelectItem>
                       <SelectItem value="Europe/London">London</SelectItem>
                       <SelectItem value="Europe/Paris">Paris</SelectItem>
                       <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
@@ -685,7 +793,9 @@ export default function OrganizationSettingsPage() {
                 <Separator />
 
                 <div>
-                  <h3 className="text-lg font-medium mb-4">Contact Information</h3>
+                  <h3 className="text-lg font-medium mb-4">
+                    Contact Information
+                  </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="contactName">Primary Contact Name</Label>
@@ -696,7 +806,9 @@ export default function OrganizationSettingsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="contactEmail">Primary Contact Email</Label>
+                      <Label htmlFor="contactEmail">
+                        Primary Contact Email
+                      </Label>
                       <Input
                         id="contactEmail"
                         type="email"
@@ -730,18 +842,25 @@ export default function OrganizationSettingsPage() {
             <CardHeader>
               <CardTitle>Password Policy & Security</CardTitle>
               <CardDescription>
-                Configure password requirements and security policies for this organization
+                Configure password requirements and security policies for this
+                organization
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={passwordForm.handleSubmit(savePasswordPolicy)} className="space-y-6">
+              <form
+                onSubmit={passwordForm.handleSubmit(savePasswordPolicy)}
+                className="space-y-6"
+              >
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-start space-x-3">
                     <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
                     <div>
-                      <h4 className="font-medium text-blue-900">Organization Security Settings</h4>
+                      <h4 className="font-medium text-blue-900">
+                        Organization Security Settings
+                      </h4>
                       <p className="text-sm text-blue-800 mt-1">
-                        These settings apply only to users within this organization and override global defaults.
+                        These settings apply only to users within this
+                        organization and override global defaults.
                       </p>
                     </div>
                   </div>
@@ -755,7 +874,9 @@ export default function OrganizationSettingsPage() {
                       type="number"
                       min="6"
                       max="128"
-                      {...passwordForm.register("minLength", { valueAsNumber: true })}
+                      {...passwordForm.register("minLength", {
+                        valueAsNumber: true,
+                      })}
                     />
                   </div>
                   <div className="space-y-2">
@@ -765,7 +886,9 @@ export default function OrganizationSettingsPage() {
                       type="number"
                       min="0"
                       max="24"
-                      {...passwordForm.register("passwordHistory", { valueAsNumber: true })}
+                      {...passwordForm.register("passwordHistory", {
+                        valueAsNumber: true,
+                      })}
                     />
                     <p className="text-xs text-gray-500">
                       Prevent reusing the last N passwords
@@ -777,14 +900,18 @@ export default function OrganizationSettingsPage() {
                   <h4 className="font-medium">Password Requirements</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="requireUppercase">Require uppercase letters</Label>
+                      <Label htmlFor="requireUppercase">
+                        Require uppercase letters
+                      </Label>
                       <Switch
                         id="requireUppercase"
                         {...passwordForm.register("requireUppercase")}
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="requireLowercase">Require lowercase letters</Label>
+                      <Label htmlFor="requireLowercase">
+                        Require lowercase letters
+                      </Label>
                       <Switch
                         id="requireLowercase"
                         {...passwordForm.register("requireLowercase")}
@@ -798,7 +925,9 @@ export default function OrganizationSettingsPage() {
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="requireSpecialChars">Require special characters</Label>
+                      <Label htmlFor="requireSpecialChars">
+                        Require special characters
+                      </Label>
                       <Switch
                         id="requireSpecialChars"
                         {...passwordForm.register("requireSpecialChars")}
@@ -810,11 +939,15 @@ export default function OrganizationSettingsPage() {
                 <Separator />
 
                 <div className="space-y-4">
-                  <h4 className="font-medium">Organization Authentication Settings</h4>
-                  
+                  <h4 className="font-medium">
+                    Organization Authentication Settings
+                  </h4>
+
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="enableMFA">Require Multi-Factor Authentication</Label>
+                      <Label htmlFor="enableMFA">
+                        Require Multi-Factor Authentication
+                      </Label>
                       <p className="text-sm text-gray-500">
                         Force all organization members to enable MFA
                       </p>
@@ -827,7 +960,9 @@ export default function OrganizationSettingsPage() {
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="allowPasswordReset">Allow Password Reset</Label>
+                      <Label htmlFor="allowPasswordReset">
+                        Allow Password Reset
+                      </Label>
                       <p className="text-sm text-gray-500">
                         Allow users to reset passwords via email
                       </p>
@@ -840,7 +975,9 @@ export default function OrganizationSettingsPage() {
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="enforcePasswordComplexity">Enforce Password Complexity</Label>
+                      <Label htmlFor="enforcePasswordComplexity">
+                        Enforce Password Complexity
+                      </Label>
                       <p className="text-sm text-gray-500">
                         Strict password validation rules
                       </p>
@@ -854,30 +991,36 @@ export default function OrganizationSettingsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="sessionTimeout">Session Timeout (minutes)</Label>
+                    <Label htmlFor="sessionTimeout">
+                      Session Timeout (minutes)
+                    </Label>
                     <Input
                       id="sessionTimeout"
                       type="number"
                       min="5"
                       max="1440"
-                      {...passwordForm.register("sessionTimeout", { valueAsNumber: true })}
+                      {...passwordForm.register("sessionTimeout", {
+                        valueAsNumber: true,
+                      })}
                     />
                     <p className="text-xs text-gray-500">
                       Auto-logout after inactivity
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="passwordExpiration">Password Expiration (days)</Label>
+                    <Label htmlFor="passwordExpiration">
+                      Password Expiration (days)
+                    </Label>
                     <Input
                       id="passwordExpiration"
                       type="number"
                       min="0"
                       max="365"
-                      {...passwordForm.register("passwordExpiration", { valueAsNumber: true })}
+                      {...passwordForm.register("passwordExpiration", {
+                        valueAsNumber: true,
+                      })}
                     />
-                    <p className="text-xs text-gray-500">
-                      0 = Never expires
-                    </p>
+                    <p className="text-xs text-gray-500">0 = Never expires</p>
                   </div>
                 </div>
 
@@ -889,17 +1032,23 @@ export default function OrganizationSettingsPage() {
                       type="number"
                       min="1"
                       max="20"
-                      {...passwordForm.register("maxLoginAttempts", { valueAsNumber: true })}
+                      {...passwordForm.register("maxLoginAttempts", {
+                        valueAsNumber: true,
+                      })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lockoutDuration">Lockout Duration (minutes)</Label>
+                    <Label htmlFor="lockoutDuration">
+                      Lockout Duration (minutes)
+                    </Label>
                     <Input
                       id="lockoutDuration"
                       type="number"
                       min="1"
                       max="1440"
-                      {...passwordForm.register("lockoutDuration", { valueAsNumber: true })}
+                      {...passwordForm.register("lockoutDuration", {
+                        valueAsNumber: true,
+                      })}
                     />
                   </div>
                 </div>
@@ -919,18 +1068,25 @@ export default function OrganizationSettingsPage() {
             <CardHeader>
               <CardTitle>Domain Configuration</CardTitle>
               <CardDescription>
-                Configure allowed URLs, custom domains, and SDK whitelisting for your authentication flows
+                Configure allowed URLs, custom domains, and SDK whitelisting for
+                your authentication flows
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={domainForm.handleSubmit(saveDomainSettings)} className="space-y-6">
+              <form
+                onSubmit={domainForm.handleSubmit(saveDomainSettings)}
+                className="space-y-6"
+              >
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-start space-x-3">
                     <Globe className="h-5 w-5 text-green-600 mt-0.5" />
                     <div>
-                      <h4 className="font-medium text-green-900">SDK Domain Whitelisting</h4>
+                      <h4 className="font-medium text-green-900">
+                        SDK Domain Whitelisting
+                      </h4>
                       <p className="text-sm text-green-800 mt-1">
-                        Control which domains can use your authentication SDK and API endpoints.
+                        Control which domains can use your authentication SDK
+                        and API endpoints.
                       </p>
                     </div>
                   </div>
@@ -947,7 +1103,9 @@ https://localhost:3000"
                     {...domainForm.register("sdkAllowedDomains")}
                   />
                   <p className="text-sm text-gray-500">
-                    One domain per line. These domains can use your authentication SDK. Leave empty to allow all domains (not recommended for production).
+                    One domain per line. These domains can use your
+                    authentication SDK. Leave empty to allow all domains (not
+                    recommended for production).
                   </p>
                 </div>
 
@@ -971,7 +1129,9 @@ https://localhost:3000"
                       type="number"
                       min="0"
                       max="86400"
-                      {...domainForm.register("corsMaxAge", { valueAsNumber: true })}
+                      {...domainForm.register("corsMaxAge", {
+                        valueAsNumber: true,
+                      })}
                     />
                     <p className="text-xs text-gray-500">
                       How long browsers cache CORS preflight responses
@@ -982,7 +1142,9 @@ https://localhost:3000"
                 <Separator />
 
                 <div className="space-y-2">
-                  <Label htmlFor="allowedCallbackUrls">Allowed Callback URLs</Label>
+                  <Label htmlFor="allowedCallbackUrls">
+                    Allowed Callback URLs
+                  </Label>
                   <Textarea
                     id="allowedCallbackUrls"
                     placeholder="https://yourapp.com/callback
@@ -990,7 +1152,8 @@ https://yourapp.com/auth/callback"
                     {...domainForm.register("allowedCallbackUrls")}
                   />
                   <p className="text-sm text-gray-500">
-                    One URL per line. These are the URLs where users will be redirected after authentication.
+                    One URL per line. These are the URLs where users will be
+                    redirected after authentication.
                   </p>
                 </div>
 
@@ -1016,7 +1179,8 @@ https://localhost:3000"
                     {...domainForm.register("allowedWebOrigins")}
                   />
                   <p className="text-sm text-gray-500">
-                    Origins allowed to make CORS requests to the authentication API.
+                    Origins allowed to make CORS requests to the authentication
+                    API.
                   </p>
                 </div>
 
@@ -1030,7 +1194,8 @@ https://localhost:3000"
                     {...domainForm.register("customDomain")}
                   />
                   <p className="text-sm text-gray-500">
-                    Use your own domain for authentication pages instead of our default domain.
+                    Use your own domain for authentication pages instead of our
+                    default domain.
                   </p>
                 </div>
 
@@ -1049,11 +1214,15 @@ https://localhost:3000"
             <CardHeader>
               <CardTitle>Branding & Customization</CardTitle>
               <CardDescription>
-                Customize the appearance of your authentication pages and organization branding
+                Customize the appearance of your authentication pages and
+                organization branding
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={brandingForm.handleSubmit(saveBrandingSettings)} className="space-y-6">
+              <form
+                onSubmit={brandingForm.handleSubmit(saveBrandingSettings)}
+                className="space-y-6"
+              >
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="primaryColor">Primary Color</Label>
@@ -1096,7 +1265,8 @@ https://localhost:3000"
                       {...brandingForm.register("logoUrl")}
                     />
                     <p className="text-sm text-gray-500">
-                      Logo will be displayed on authentication pages (recommended: 200x50px)
+                      Logo will be displayed on authentication pages
+                      (recommended: 200x50px)
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -1124,7 +1294,8 @@ https://localhost:3000"
                     {...brandingForm.register("customCss")}
                   />
                   <p className="text-sm text-gray-500">
-                    Custom CSS will be injected into authentication pages. Use carefully.
+                    Custom CSS will be injected into authentication pages. Use
+                    carefully.
                   </p>
                 </div>
 
@@ -1147,13 +1318,20 @@ https://localhost:3000"
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={notificationForm.handleSubmit(saveNotificationSettings)} className="space-y-6">
+              <form
+                onSubmit={notificationForm.handleSubmit(
+                  saveNotificationSettings
+                )}
+                className="space-y-6"
+              >
                 <div className="space-y-4">
                   <h4 className="font-medium">Email Notifications</h4>
-                  
+
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="emailNotifications">General Email Notifications</Label>
+                      <Label htmlFor="emailNotifications">
+                        General Email Notifications
+                      </Label>
                       <p className="text-sm text-gray-500">
                         Receive general updates and announcements via email
                       </p>
@@ -1168,7 +1346,8 @@ https://localhost:3000"
                     <div className="space-y-1">
                       <Label htmlFor="securityAlerts">Security Alerts</Label>
                       <p className="text-sm text-gray-500">
-                        Important security notifications and alerts (recommended)
+                        Important security notifications and alerts
+                        (recommended)
                       </p>
                     </div>
                     <Switch
@@ -1207,7 +1386,9 @@ https://localhost:3000"
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="marketingEmails">Marketing Communications</Label>
+                      <Label htmlFor="marketingEmails">
+                        Marketing Communications
+                      </Label>
                       <p className="text-sm text-gray-500">
                         Product updates, tips, and promotional content
                       </p>
@@ -1221,7 +1402,9 @@ https://localhost:3000"
 
                 <Button type="submit" disabled={updatingNotifications}>
                   <Save className="h-4 w-4 mr-2" />
-                  {updatingNotifications ? "Saving..." : "Save Notification Settings"}
+                  {updatingNotifications
+                    ? "Saving..."
+                    : "Save Notification Settings"}
                 </Button>
               </form>
             </CardContent>
@@ -1238,13 +1421,19 @@ https://localhost:3000"
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={analyticsForm.handleSubmit(saveAnalyticsSettings)} className="space-y-6">
+              <form
+                onSubmit={analyticsForm.handleSubmit(saveAnalyticsSettings)}
+                className="space-y-6"
+              >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="enableTracking">Enable Analytics Tracking</Label>
+                      <Label htmlFor="enableTracking">
+                        Enable Analytics Tracking
+                      </Label>
                       <p className="text-sm text-gray-500">
-                        Track authentication events and user behavior for insights
+                        Track authentication events and user behavior for
+                        insights
                       </p>
                     </div>
                     <Switch
@@ -1258,13 +1447,17 @@ https://localhost:3000"
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="retentionPeriod">Data Retention Period (days)</Label>
+                    <Label htmlFor="retentionPeriod">
+                      Data Retention Period (days)
+                    </Label>
                     <Input
                       id="retentionPeriod"
                       type="number"
                       min="1"
                       max="365"
-                      {...analyticsForm.register("retentionPeriod", { valueAsNumber: true })}
+                      {...analyticsForm.register("retentionPeriod", {
+                        valueAsNumber: true,
+                      })}
                     />
                     <p className="text-sm text-gray-500">
                       How long to keep analytics data before automatic deletion
@@ -1272,9 +1465,11 @@ https://localhost:3000"
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="exportFormat">Export Format</Label>
-                    <Select 
-                      value={analyticsForm.watch("exportFormat")} 
-                      onValueChange={(value: 'JSON' | 'CSV') => analyticsForm.setValue("exportFormat", value)}
+                    <Select
+                      value={analyticsForm.watch("exportFormat")}
+                      onValueChange={(value: "JSON" | "CSV") =>
+                        analyticsForm.setValue("exportFormat", value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select export format" />
@@ -1294,10 +1489,13 @@ https://localhost:3000"
                   <div className="flex items-start space-x-3">
                     <BarChart3 className="h-5 w-5 text-blue-600 mt-0.5" />
                     <div>
-                      <h4 className="font-medium text-blue-900">Privacy & Compliance</h4>
+                      <h4 className="font-medium text-blue-900">
+                        Privacy & Compliance
+                      </h4>
                       <p className="text-sm text-blue-800 mt-1">
-                        We collect only essential analytics data and follow GDPR/CCPA guidelines. 
-                        Personal user data is anonymized and can be deleted upon request.
+                        We collect only essential analytics data and follow
+                        GDPR/CCPA guidelines. Personal user data is anonymized
+                        and can be deleted upon request.
                       </p>
                     </div>
                   </div>
@@ -1317,15 +1515,21 @@ https://localhost:3000"
           <Card>
             <CardHeader>
               <CardTitle>Integrations & APIs</CardTitle>
-              <CardDescription>Coming soon - Configure webhooks, social providers, and API settings</CardDescription>
+              <CardDescription>
+                Coming soon - Configure webhooks, social providers, and API
+                settings
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-center py-12 space-y-4">
                 <Webhook className="h-12 w-12 mx-auto text-gray-400" />
                 <div>
-                  <h3 className="font-medium text-lg">Integrations Coming Soon</h3>
+                  <h3 className="font-medium text-lg">
+                    Integrations Coming Soon
+                  </h3>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Configure third-party integrations, webhooks, social login providers, and API settings.
+                    Configure third-party integrations, webhooks, social login
+                    providers, and API settings.
                   </p>
                 </div>
               </div>
@@ -1337,15 +1541,21 @@ https://localhost:3000"
           <Card>
             <CardHeader>
               <CardTitle>Advanced Features</CardTitle>
-              <CardDescription>Coming soon - Enterprise SSO, compliance, and advanced security features</CardDescription>
+              <CardDescription>
+                Coming soon - Enterprise SSO, compliance, and advanced security
+                features
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-center py-12 space-y-4">
                 <Crown className="h-12 w-12 mx-auto text-gray-400" />
                 <div>
-                  <h3 className="font-medium text-lg">Enterprise Features Coming Soon</h3>
+                  <h3 className="font-medium text-lg">
+                    Enterprise Features Coming Soon
+                  </h3>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Advanced security features, enterprise SSO, compliance tools, and audit controls.
+                    Advanced security features, enterprise SSO, compliance
+                    tools, and audit controls.
                   </p>
                 </div>
               </div>
@@ -1356,4 +1566,3 @@ https://localhost:3000"
     </div>
   );
 }
-

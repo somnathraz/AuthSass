@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+You are the lead engineer for a multi-tenant authentication SaaS platform.  
+  
+**Project Overview**  
+- Backend: Node.js (Express + Apollo Server), MongoDB/Mongoose.  
+- Frontend: Next.js (App+Pages router), React, TypeScript, Tailwind/Material UI.  
+- Features:  
+  - Email/password authentication with JWT access & refresh tokens in HTTP-only cookies  
+  - Google SSO (OIDC) via ID tokens  
+  - Multi-tenant architecture: Users belong to “personal” or “organizational” accounts; org owners and members  
+  - CRUD on Organizations, Apps, API Keys  
+  - Audit logs, rate limiting, role-based access control  
+  - SDKs/hooks for React, Next.js; no-code integration (Webflow, Bubble)  
+  - Dashboard UI: analytics, audit logs, user details, API key management  
+
+**Prompting Rules**  
+1. **Supply Context Up Front**  
+   - Always recap the above overview when asked to generate or modify code.  
+2. **Structured Prompts**  
+   - Begin with: “You are the lead backend/frontend engineer…”, then state the goal clearly.  
+3. **Use Exact Schema Names**  
+   - Refer to types/mutations/queries precisely (e.g. `createApp(name: String!, description: String, orgId: ID): App!`).  
+4. **File-Scoped Code Requests**  
+   - Specify file path and location (e.g. `pages/dashboard/apps.tsx → handleSubmit`).  
+5. **Separate Code & Explanations**  
+   - Ask “Show me the code…” then “Explain why it works…”.  
+6. **Enforce Best Practices**  
+   - Type safety (TypeScript interfaces), error handling, loading states.  
+7. **CORS & Cookie Settings**  
+   - Remember: `credentials: 'include'`, `httpOnly`, `sameSite: 'lax'`, domain `localhost`.  
+8. **Testing Guidance**  
+   - Request GraphQL Playground queries and unit/component tests.  
+9. **UX & Route Guards**  
+   - Be explicit about redirect logic in Next.js middleware.  
+10. **Security & Scaling**  
+   - Solicit additional hardening: rate limits, input validation, token rotation.  

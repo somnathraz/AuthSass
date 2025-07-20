@@ -1,4 +1,4 @@
-import { gql } from '@apollo/client';
+import { gql } from "@apollo/client";
 
 // ===== APPLICATION QUERY TYPES =====
 
@@ -86,7 +86,7 @@ export interface UserApp {
     type: string;
   };
   userRole: Role;
-  accessType: 'FULL' | 'SCOPED' | 'DIRECT' | 'ORGANIZATION';
+  accessType: "FULL" | "SCOPED" | "DIRECT" | "ORGANIZATION";
   grantedAt?: string;
   grantedBy?: {
     id: string;
@@ -105,37 +105,37 @@ export interface UserApp {
 // ===== ENUMS =====
 
 export enum AppType {
-  WEB = 'WEB',
-  MOBILE = 'MOBILE',
-  API = 'API',
-  SERVICE = 'SERVICE'
+  WEB = "WEB",
+  MOBILE = "MOBILE",
+  API = "API",
+  SERVICE = "SERVICE",
 }
 
 export enum Status {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  PENDING = 'PENDING',
-  SUSPENDED = 'SUSPENDED'
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+  PENDING = "PENDING",
+  SUSPENDED = "SUSPENDED",
 }
 
 export enum Role {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  ADMIN = 'ADMIN',
-  MEMBER = 'MEMBER',
-  VIEWER = 'VIEWER',
-  OWNER = 'OWNER'
+  SUPER_ADMIN = "SUPER_ADMIN",
+  ADMIN = "ADMIN",
+  MEMBER = "MEMBER",
+  VIEWER = "VIEWER",
+  OWNER = "OWNER",
 }
 
 export enum AccessType {
-  FULL = 'FULL',
-  SCOPED = 'SCOPED',
-  DIRECT = 'DIRECT',
-  ORGANIZATION = 'ORGANIZATION'
+  FULL = "FULL",
+  SCOPED = "SCOPED",
+  DIRECT = "DIRECT",
+  ORGANIZATION = "ORGANIZATION",
 }
 
 export enum SortOrder {
-  ASC = 'ASC',
-  DESC = 'DESC'
+  ASC = "ASC",
+  DESC = "DESC",
 }
 
 // ===== FILTER TYPES =====
@@ -159,7 +159,7 @@ export interface AppsQueryOptions {
 // Add input types to match backend schema
 export interface AppFilters {
   organizationId?: string;
-  accessType?: 'FULL' | 'SCOPED' | 'DIRECT' | 'ORGANIZATION';
+  accessType?: "FULL" | "SCOPED" | "DIRECT" | "ORGANIZATION";
   role?: Role;
 }
 
@@ -346,6 +346,12 @@ export const GET_USER_APPS = gql`
       memberCount
       userRole
       createdAt
+      brandingSettings {
+        customLogo
+      }
+      generalSettings {
+        logoUrl
+      }
     }
   }
 `;
@@ -428,11 +434,7 @@ export const GET_ORGANIZATION_APPS = gql`
 
 // Search applications (for admin)
 export const SEARCH_APPS = gql`
-  query SearchApps(
-    $search: String!
-    $limit: Int
-    $organizationId: ID
-  ) {
+  query SearchApps($search: String!, $limit: Int, $organizationId: ID) {
     apps(
       filter: { search: $search, organizationId: $organizationId }
       limit: $limit
@@ -478,4 +480,4 @@ export default {
   GET_ORGANIZATION_APPS,
   SEARCH_APPS,
   GET_APP_STATS,
-}; 
+};
