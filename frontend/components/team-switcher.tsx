@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, SquareTerminal } from "lucide-react";
 import Image from "next/image";
 import {
   DropdownMenu,
@@ -54,22 +54,49 @@ export function TeamSwitcher({
   // Helper to render logo (image or icon)
   const renderLogo = (logo: string | React.ElementType, alt: string) => {
     if (typeof logo === "string" && logo) {
-      return (
-        <Image
-          src={logo}
-          alt={alt}
-          width={16}
-          height={16}
-          className="size-4 rounded object-cover bg-white"
-        />
-      );
+      // Check if it's an SVG (DiceBear or other SVG URLs)
+      const isSvg = logo.includes(".svg") || logo.includes("api.dicebear.com");
+
+      if (isSvg) {
+        // Use regular img tag for SVG images since Next.js Image can't optimize them
+        return (
+          <img src={logo} alt={alt} className="size-4 rounded object-cover" />
+        );
+      } else {
+        // Use Next.js Image for other image types
+        return (
+          <Image
+            src={logo}
+            alt={alt}
+            width={16}
+            height={16}
+            className="size-4 rounded object-cover"
+          />
+        );
+      }
     } else if (typeof logo === "function") {
       const Icon = logo;
       return <Icon className="size-4" />;
+    } else if (typeof logo === "object") {
+      // Handle object type logos by showing fallback icon
+      return <SquareTerminal className="size-4" />;
     }
     return null;
   };
-  console.log(activeTeam, "activeTeam.logo");
+
+  // Check if we have a fallback icon (no actual logo)
+  const hasFallbackIcon =
+    typeof activeTeam.logo === "function" ||
+    typeof activeTeam.logo === "object";
+  console.log("TeamSwitcher Debug:", {
+    activeTeamName: activeTeam.name,
+    activeTeamLogo: activeTeam.logo,
+    logoType: typeof activeTeam.logo,
+    hasFallbackIcon,
+    isString: typeof activeTeam.logo === "string",
+    isFunction: typeof activeTeam.logo === "function",
+    isObject: typeof activeTeam.logo === "object",
+  });
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -79,7 +106,13 @@ export function TeamSwitcher({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+              <div
+                className={`flex aspect-square size-8 items-center justify-center rounded-lg border-2 border-sidebar-accent ${
+                  hasFallbackIcon
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : ""
+                }`}
+              >
                 {renderLogo(activeTeam.logo, activeTeam.name)}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
@@ -102,21 +135,34 @@ export function TeamSwitcher({
               {renderCreateItem ? "Organizations" : "Applications"}
             </DropdownMenuLabel>
 
-            {teams.map((team) => (
-              <DropdownMenuItem
-                key={team.id}
-                onClick={() => {
-                  setActiveTeam(team);
-                  onSelect(team.id);
-                }}
-                className="flex items-center justify-between gap-2 p-2"
-              >
-                <div className="flex items-center gap-2">
-                  {renderLogo(team.logo, team.name)}
-                  <span className="truncate text-sm">{team.name}</span>
-                </div>
-              </DropdownMenuItem>
-            ))}
+            {teams.map((team) => {
+              const hasTeamFallbackIcon =
+                typeof team.logo === "function" ||
+                typeof team.logo === "object";
+              return (
+                <DropdownMenuItem
+                  key={team.id}
+                  onClick={() => {
+                    setActiveTeam(team);
+                    onSelect(team.id);
+                  }}
+                  className="flex items-center justify-between gap-2 p-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`flex aspect-square size-4 items-center justify-center rounded  ${
+                        hasTeamFallbackIcon
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : ""
+                      }`}
+                    >
+                      {renderLogo(team.logo, team.name)}
+                    </div>
+                    <span className="truncate text-sm">{team.name}</span>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
 
             {renderCreateItem && (
               <>

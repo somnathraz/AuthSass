@@ -9,7 +9,7 @@ import { useUserAndOrg } from "@/services/authService";
 import { Settings2, SquareTerminal, User } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useOrgAccessGuard } from "@/hooks/useOrgAccessGuard";
-import { PageLoader } from "@/components/ui/loading";
+import { DashboardLayoutShimmer } from "@/components/ui/loading";
 
 export default function DashboardOrgLayout({
   children,
@@ -24,12 +24,7 @@ export default function DashboardOrgLayout({
 
   // Handle loading state
   if (loading) {
-    return (
-      <PageLoader 
-        title="Loading Dashboard..." 
-        description="Setting up your workspace"
-      />
-    );
+    return <DashboardLayoutShimmer />;
   }
 
   // Handle error state
@@ -39,11 +34,23 @@ export default function DashboardOrgLayout({
         <div className="max-w-md w-full mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-8 h-8 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Dashboard</h1>
+            <h1 className="text-xl font-semibold text-gray-900 mb-2">
+              Error Loading Dashboard
+            </h1>
             <p className="text-gray-600 mb-6">Error: {error.message}</p>
           </div>
         </div>
@@ -51,23 +58,9 @@ export default function DashboardOrgLayout({
     );
   }
 
-  // Handle no user state
+  // Handle no user state - show shimmer instead of error
   if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="max-w-md w-full mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-yellow-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">No User Data</h1>
-            <p className="text-gray-600 mb-6">Please sign in to continue</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <DashboardLayoutShimmer />;
   }
 
   // All hooks have been called, now we can safely process the data
@@ -80,7 +73,7 @@ export default function DashboardOrgLayout({
   const teams = organizations.map((o) => ({
     id: o.id,
     name: o.name,
-    logo: SquareTerminal,
+    logo: o.imageUrl || SquareTerminal, // Use imageUrl if available, otherwise fallback to icon
     plan: "",
   }));
 

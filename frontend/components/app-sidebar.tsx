@@ -17,7 +17,6 @@ import { useParams, useRouter, usePathname } from "next/navigation";
 import { useFetchApp, useUserAndOrg } from "@/services/authService";
 import { CreateAppModal } from "@/components/CreateAppModal/CreateAppModal";
 import { CreateOrgModal } from "@/components/CreateOrgModal/CreateOrgModal";
-import { SpinnerLoader, PageLoader } from "@/components/ui/loading";
 
 export type NavItem = {
   title: string;
@@ -66,84 +65,59 @@ export function AppSidebar({
   // Always fetch apps when we have an orgId - needed for both org mode (to show app list) and app mode (to show app dropdown)
   const shouldShowApps = orgId && typeof orgId === "string" && orgId.length > 0;
 
-  // Enhanced loading and error handling
-  if (uLoading) {
-    return (
-      <Sidebar collapsible="icon" {...sidebarProps}>
-        <SidebarContent>
-          <div className="flex items-center justify-center py-8">
-            <SpinnerLoader text="Loading user..." />
-          </div>
-        </SidebarContent>
-      </Sidebar>
-    );
-  }
-
-  if (uError) {
-    return (
-      <Sidebar collapsible="icon" {...sidebarProps}>
-        <SidebarContent>
-          <div className="flex flex-col items-center justify-center py-8 space-y-4">
-            <div className="text-red-600 text-sm text-center">
-              Error loading user
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-xs text-blue-600 hover:underline"
-            >
-              Try again
-            </button>
-          </div>
-        </SidebarContent>
-      </Sidebar>
-    );
-  }
-
-  if (!user) {
-    return (
-      <Sidebar collapsible="icon" {...sidebarProps}>
-        <SidebarContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="text-sm text-muted-foreground">
-              Not authenticated
-            </div>
-          </div>
-        </SidebarContent>
-      </Sidebar>
-    );
-  }
-
-  // Only show app loading states if we're actually trying to fetch apps
-  if (shouldShowApps && aLoading) {
+  // Enhanced loading and error handling with shimmer effects
+  if (uLoading || uError || !user) {
     return (
       <Sidebar collapsible="icon" {...sidebarProps}>
         <SidebarHeader>
           <div className="p-4">
-            <SpinnerLoader text="Loading apps..." />
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="space-y-2 flex-1">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+              </div>
+            </div>
           </div>
         </SidebarHeader>
         <SidebarContent>
-          <NavMain items={[]} />
+          <div className="space-y-2 p-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center space-x-3 p-2">
+                <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-200 rounded animate-pulse flex-1"></div>
+              </div>
+            ))}
+          </div>
         </SidebarContent>
         <SidebarFooter>
-          <NavUser
-            user={{
-              name: user.username,
-              email: user.email,
-              avatar: user.image || "",
-            }}
-          />
+          <div className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+              <div className="space-y-2 flex-1">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2"></div>
+              </div>
+            </div>
+          </div>
         </SidebarFooter>
       </Sidebar>
     );
   }
 
-  if (shouldShowApps && aError) {
+  // Only show app loading states if we're actually trying to fetch apps
+  if (shouldShowApps && (aLoading || aError)) {
     return (
       <Sidebar collapsible="icon" {...sidebarProps}>
         <SidebarHeader>
           <div className="p-4">
-            <div className="text-red-600 text-sm">Error loading apps</div>
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="space-y-2 flex-1">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+              </div>
+            </div>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -164,33 +138,16 @@ export function AppSidebar({
 
   // Ensure arrays are never null/undefined
   const safeOrganizations = organizations || [];
-  // In app mode, we always want to show the apps for the dropdown
-  safeOrganizations.forEach((org, idx) => {
-    console.log(`[Org ${idx}] name:`, org.name);
-    console.log(`[Org ${idx}] imageUrl:`, org.imageUrl);
-    console.log(`[Org ${idx}] logo fallback used:`, !org.imageUrl);
-  });
   const safeApps = shouldShowApps ? apps || [] : [];
-  safeApps.forEach((app, idx) => {
-    console.log(`[App ${idx}] name:`, app);
-  });
-  console.log(isOrgMode, teamsOverride, "isOrgMode");
 
   const teams: Team[] =
     teamsOverride ??
     (isOrgMode
-      ? safeOrganizations.map((o, i) => {
-          const useFallback = !o.imageUrl;
-          console.log(`[TeamMap ${i}] name: ${o.name}`);
-          console.log(`[TeamMap ${i}] imageUrl:`, o.imageUrl);
-          console.log(`[TeamMap ${i}] logo fallback used:`, useFallback);
-          console.log(o.imageUrl, "o.imageUrl");
-          return {
-            id: o.id,
-            name: o.name,
-            logo: o.imageUrl || SquareTerminal,
-          };
-        })
+      ? safeOrganizations.map((o) => ({
+          id: o.id,
+          name: o.name,
+          logo: o.imageUrl || SquareTerminal,
+        }))
       : safeApps.map((a) => ({
           id: a.id,
           name: a.name,
@@ -199,11 +156,6 @@ export function AppSidebar({
             a.generalSettings?.logoUrl ||
             SquareTerminal,
         })));
-  teams.forEach((team, idx) => {
-    console.log(`[Team ${idx}] name:`, team.name);
-    console.log(`[Team ${idx}] logo:`, team.logo);
-    console.log(`[Team ${idx}] logo typeof:`, typeof team.logo);
-  });
   const activeId = isOrgMode ? orgId : appId;
 
   const onSelect = (newId: string) =>
