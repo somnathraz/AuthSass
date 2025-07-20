@@ -12,7 +12,7 @@
 
 # testing
 /coverage
-*.md.*
+
 # next.js
 /.next/
 /out/
