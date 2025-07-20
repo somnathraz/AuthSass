@@ -3,7 +3,15 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { Trash, MoreHorizontal, UserCheck, UserX, Edit, Users, UserPlus } from "lucide-react";
+import {
+  Trash,
+  MoreHorizontal,
+  UserCheck,
+  UserX,
+  Edit,
+  Users,
+  UserPlus,
+} from "lucide-react";
 
 import {
   useGetOrgMembers,
@@ -41,6 +49,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TableShimmer } from "@/components/ui/loading";
 
 type Role = "member" | "admin";
 type RoleFilter = "all" | Role;
@@ -85,7 +94,7 @@ function InviteModal({
 
   // Get role description
   const getRoleDescription = (role: Role) => {
-    return role === "admin" 
+    return role === "admin"
       ? "Can manage organization settings and members"
       : "Can view and collaborate within the organization";
   };
@@ -110,7 +119,7 @@ function InviteModal({
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -150,7 +159,7 @@ function InviteModal({
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogTrigger asChild>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button>
             <UserCheck className="w-4 h-4 mr-2" />
             Add Team Member
           </Button>
@@ -162,7 +171,8 @@ function InviteModal({
               <span>Add Team Member</span>
             </DialogTitle>
             <DialogDescription>
-              Invite a new team member to join your organization. They'll receive an email invitation to get started.
+              Invite a new team member to join your organization. They'll
+              receive an email invitation to get started.
             </DialogDescription>
           </DialogHeader>
 
@@ -172,7 +182,9 @@ function InviteModal({
                 <UserCheck className="w-6 h-6 text-green-600" />
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-medium text-green-900">Invitation Sent!</h3>
+                <h3 className="text-lg font-medium text-green-900">
+                  Invitation Sent!
+                </h3>
                 <p className="text-sm text-green-700">
                   We've sent an invitation to {formData.email}
                 </p>
@@ -182,14 +194,19 @@ function InviteModal({
             <form onSubmit={handleInvite} className="space-y-6">
               {/* Email Address */}
               <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="email"
+                  className="text-sm font-medium text-gray-700"
+                >
                   Email Address <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, email: e.target.value }))
+                  }
                   placeholder="teammate@company.com"
                   className={`h-11 ${errors.email ? "border-red-500" : ""}`}
                   autoFocus
@@ -209,13 +226,16 @@ function InviteModal({
 
               {/* Organization Role */}
               <div className="space-y-2">
-                <label htmlFor="role" className="text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="role"
+                  className="text-sm font-medium text-gray-700"
+                >
                   Organization Role <span className="text-red-500">*</span>
                 </label>
-                <Select 
-                  value={formData.role} 
-                  onValueChange={(value: Role) => 
-                    setFormData(prev => ({ ...prev, role: value }))
+                <Select
+                  value={formData.role}
+                  onValueChange={(value: Role) =>
+                    setFormData((prev) => ({ ...prev, role: value }))
                   }
                 >
                   <SelectTrigger className="h-11">
@@ -227,7 +247,9 @@ function InviteModal({
                         <span className="text-lg">👤</span>
                         <div>
                           <div className="font-medium">Member</div>
-                          <div className="text-xs text-gray-500">Can view and collaborate within the organization</div>
+                          <div className="text-xs text-gray-500">
+                            Can view and collaborate within the organization
+                          </div>
                         </div>
                       </div>
                     </SelectItem>
@@ -236,7 +258,9 @@ function InviteModal({
                         <span className="text-lg">🛡️</span>
                         <div>
                           <div className="font-medium">Admin</div>
-                          <div className="text-xs text-gray-500">Can manage organization settings and members</div>
+                          <div className="text-xs text-gray-500">
+                            Can manage organization settings and members
+                          </div>
                         </div>
                       </div>
                     </SelectItem>
@@ -244,25 +268,36 @@ function InviteModal({
                 </Select>
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <span className="text-lg">{getRoleIcon(formData.role)}</span>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    formData.role === 'admin' 
-                      ? 'bg-purple-100 text-purple-800 border border-purple-200' 
-                      : 'bg-blue-100 text-blue-800 border border-blue-200'
-                  }`}>
-                    {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)}
+                  <span
+                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      formData.role === "admin"
+                        ? "bg-purple-100 text-purple-800 border border-purple-200"
+                        : "bg-blue-100 text-blue-800 border border-blue-200"
+                    }`}
+                  >
+                    {formData.role.charAt(0).toUpperCase() +
+                      formData.role.slice(1)}
                   </span>
                 </div>
               </div>
 
               {/* Personal Message (Optional) */}
               <div className="space-y-2">
-                <label htmlFor="message" className="text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="message"
+                  className="text-sm font-medium text-gray-700"
+                >
                   Personal Message
                 </label>
                 <textarea
                   id="message"
                   value={formData.message}
-                  onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      message: e.target.value,
+                    }))
+                  }
                   placeholder="Add a personal note to the invitation..."
                   rows={3}
                   className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
@@ -289,14 +324,19 @@ function InviteModal({
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
                       <h4 className="font-medium text-sm">
-                        {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} Permissions
+                        {formData.role.charAt(0).toUpperCase() +
+                          formData.role.slice(1)}{" "}
+                        Permissions
                       </h4>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        formData.role === 'admin' 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)}
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          formData.role === "admin"
+                            ? "bg-purple-100 text-purple-800"
+                            : "bg-blue-100 text-blue-800"
+                        }`}
+                      >
+                        {formData.role.charAt(0).toUpperCase() +
+                          formData.role.slice(1)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
@@ -314,10 +354,20 @@ function InviteModal({
                     <span className="text-sm font-medium">Ready to invite</span>
                   </div>
                   <div className="mt-2 text-sm text-green-700">
-                    <div><strong>Email:</strong> {formData.email}</div>
-                    <div><strong>Role:</strong> {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)}</div>
+                    <div>
+                      <strong>Email:</strong> {formData.email}
+                    </div>
+                    <div>
+                      <strong>Role:</strong>{" "}
+                      {formData.role.charAt(0).toUpperCase() +
+                        formData.role.slice(1)}
+                    </div>
                     {formData.message && (
-                      <div><strong>Message:</strong> "{formData.message.substring(0, 50)}{formData.message.length > 50 ? '...' : ''}"</div>
+                      <div>
+                        <strong>Message:</strong> "
+                        {formData.message.substring(0, 50)}
+                        {formData.message.length > 50 ? "..." : ""}"
+                      </div>
                     )}
                   </div>
                 </div>
@@ -344,7 +394,10 @@ function InviteModal({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={inviting || !formData.email.trim()}>
+                <Button
+                  type="submit"
+                  disabled={inviting || !formData.email.trim()}
+                >
                   {inviting ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
@@ -375,14 +428,14 @@ export default function OrgMembersPage() {
   // Find current user's role in this organization
   const currentUserOrgRole = useMemo(() => {
     if (!user || !organizations || !orgId) return null;
-    
-    const currentOrg = organizations.find(org => org.id === orgId);
+
+    const currentOrg = organizations.find((org) => org.id === orgId);
     return currentOrg?.userRole || null;
   }, [user, organizations, orgId]);
 
   // Check if current user has admin permissions
   const canViewInvitations = useMemo(() => {
-    return currentUserOrgRole === 'ADMIN' || currentUserOrgRole === 'OWNER';
+    return currentUserOrgRole === "ADMIN" || currentUserOrgRole === "OWNER";
   }, [currentUserOrgRole]);
 
   // 1) joined members
@@ -399,14 +452,15 @@ export default function OrgMembersPage() {
     invitations: pendingInvites,
     loading: loadingInvites,
     refetch: refetchInvites,
-  } = useGetOrgInvitations(canViewInvitations ? orgId : '');
+  } = useGetOrgInvitations(canViewInvitations ? orgId : "");
 
   // 3) Invite / Remove / Cancel hooks
   const { inviteOrgMember, loading: inviting } = useInviteOrganizationMember();
   const { remove: removeOrgMember, loading: removing } =
     useRemoveOrganizationMember();
   const { cancelOrgInvitation, loading: canceling } = useCancelOrgInvitation();
-  const { updateRole: updateMemberRole, loading: updatingRole } = useUpdateMemberRole();
+  const { updateRole: updateMemberRole, loading: updatingRole } =
+    useUpdateMemberRole();
 
   // error modal state
   const [errorMsg, setErrorMsg] = useState("");
@@ -445,7 +499,7 @@ export default function OrgMembersPage() {
         status: "joined",
       })
     );
-    
+
     // Only include pending invites if user has permission to view them
     if (canViewInvitations && pendingInvites) {
       pendingInvites.forEach((inv) =>
@@ -458,7 +512,7 @@ export default function OrgMembersPage() {
         })
       );
     }
-    
+
     return Array.from(new Map(list.map((m) => [m.id + m.status, m])).values());
   }, [owner, svcMembers, pendingInvites, canViewInvitations]);
 
@@ -469,7 +523,36 @@ export default function OrgMembersPage() {
   }, [allMembers, search, roleFilter]);
 
   if (loadingMembers || (canViewInvitations && loadingInvites))
-    return <div>Loading organization members…</div>;
+    return (
+      <div className="p-6 space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="space-y-2">
+                <div className="w-48 h-8 bg-gray-200 rounded animate-pulse"></div>
+                <div className="w-64 h-4 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+          <div className="w-32 h-10 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+
+        {/* Search and Filter Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="relative flex-1 min-w-64">
+              <div className="w-full h-11 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="w-36 h-11 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+
+        <TableShimmer rows={5} />
+      </div>
+    );
   if (membersError) {
     return (
       <>
@@ -485,7 +568,9 @@ export default function OrgMembersPage() {
           throw new Error("You cannot remove the organization owner.");
         }
         if (m.id === user?.id) {
-          throw new Error("You cannot remove yourself from the organization. Please contact another administrator.");
+          throw new Error(
+            "You cannot remove yourself from the organization. Please contact another administrator."
+          );
         }
         await removeOrgMember(orgId, m.id);
       } else {
@@ -507,7 +592,8 @@ export default function OrgMembersPage() {
       await updateMemberRole(orgId, userId, newRole);
       refetchMembers();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e) || "Role update failed";
+      const msg =
+        e instanceof Error ? e.message : String(e) || "Role update failed";
       setErrorMsg(msg);
       setErrorOpen(true);
     }
@@ -517,10 +603,10 @@ export default function OrgMembersPage() {
   const canPerformActionsOn = (member: FlatMember) => {
     // Cannot perform actions on the organization owner
     if (member.id === owner?.id) return false;
-    
+
     // Cannot perform actions on yourself (prevent self-removal)
     if (member.id === user?.id) return false;
-    
+
     return true;
   };
 
@@ -546,9 +632,7 @@ export default function OrgMembersPage() {
             inviting={inviting}
             open={inviteOpen}
             onOpenChange={setInviteOpen}
-            inviteFn={(o, e, r) =>
-              inviteOrgMember(o, e, r).then(() => {})
-            }
+            inviteFn={(o, e, r) => inviteOrgMember(o, e, r).then(() => {})}
             onSuccess={() => {
               refetchMembers();
               if (refetchInvites) {
@@ -585,14 +669,16 @@ export default function OrgMembersPage() {
           </Select>
         </div>
         <div className="text-sm text-gray-500">
-          {filtered.length} member{filtered.length !== 1 ? 's' : ''} {roleFilter !== 'all' && `(${roleFilter}s)`}
+          {filtered.length} member{filtered.length !== 1 ? "s" : ""}{" "}
+          {roleFilter !== "all" && `(${roleFilter}s)`}
         </div>
       </div>
 
       {!canViewInvitations && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-blue-800 text-sm">
-            <strong>Note:</strong> You can view organization members, but only administrators can manage invitations and member roles.
+            <strong>Note:</strong> You can view organization members, but only
+            administrators can manage invitations and member roles.
           </p>
         </div>
       )}
@@ -623,7 +709,10 @@ export default function OrgMembersPage() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {filtered.map((m) => (
-                <tr key={`${m.id}-${m.status}`} className="hover:bg-gray-50/50 transition-colors">
+                <tr
+                  key={`${m.id}-${m.status}`}
+                  className="hover:bg-gray-50/50 transition-colors"
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-11 w-11">
@@ -660,24 +749,34 @@ export default function OrgMembersPage() {
                     {m.email}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
-                      m.role === 'admin' 
-                        ? 'bg-purple-100 text-purple-800 border border-purple-200' 
-                        : 'bg-blue-100 text-blue-800 border border-blue-200'
-                    }`}>
-                      <span className="mr-1">{m.role === 'admin' ? '🛡️' : '👤'}</span>
+                    <span
+                      className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
+                        m.role === "admin"
+                          ? "bg-purple-100 text-purple-800 border border-purple-200"
+                          : "bg-blue-100 text-blue-800 border border-blue-200"
+                      }`}
+                    >
+                      <span className="mr-1">
+                        {m.role === "admin" ? "🛡️" : "👤"}
+                      </span>
                       {m.role.charAt(0).toUpperCase() + m.role.slice(1)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
-                      m.status === 'joined' 
-                        ? 'bg-green-100 text-green-800 border border-green-200' 
-                        : 'bg-amber-100 text-amber-800 border border-amber-200'
-                    }`}>
-                      <div className={`w-2 h-2 rounded-full mr-2 ${
-                        m.status === 'joined' ? 'bg-green-500' : 'bg-amber-500'
-                      }`}></div>
+                    <span
+                      className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
+                        m.status === "joined"
+                          ? "bg-green-100 text-green-800 border border-green-200"
+                          : "bg-amber-100 text-amber-800 border border-amber-200"
+                      }`}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full mr-2 ${
+                          m.status === "joined"
+                            ? "bg-green-500"
+                            : "bg-amber-500"
+                        }`}
+                      ></div>
                       {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
                     </span>
                   </td>
@@ -696,11 +795,17 @@ export default function OrgMembersPage() {
                             {m.status === "joined" && (
                               <>
                                 <DropdownMenuItem
-                                  onClick={() => handleRoleUpdate(m.id, m.role === "admin" ? "member" : "admin")}
+                                  onClick={() =>
+                                    handleRoleUpdate(
+                                      m.id,
+                                      m.role === "admin" ? "member" : "admin"
+                                    )
+                                  }
                                   disabled={updatingRole}
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
-                                  Change to {m.role === "admin" ? "Member" : "Admin"}
+                                  Change to{" "}
+                                  {m.role === "admin" ? "Member" : "Admin"}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                               </>
@@ -711,13 +816,19 @@ export default function OrgMembersPage() {
                               className="text-red-600"
                             >
                               <Trash className="mr-2 h-4 w-4" />
-                              {m.status === "joined" ? "Remove" : "Cancel Invite"}
+                              {m.status === "joined"
+                                ? "Remove"
+                                : "Cancel Invite"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
                         <span className="text-gray-400 text-sm">
-                          {m.id === owner?.id ? "Owner" : m.id === user?.id ? "You" : "—"}
+                          {m.id === owner?.id
+                            ? "Owner"
+                            : m.id === user?.id
+                            ? "You"
+                            : "—"}
                         </span>
                       )}
                     </td>

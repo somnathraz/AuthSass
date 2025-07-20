@@ -75,6 +75,7 @@ import {
   useUpdateAppSecuritySettings,
   useUpdateAppBrandingSettings,
 } from "@/graphql/app.mutations";
+import { SettingsPageShimmer } from "@/components/ui/loading";
 
 // TODO: Import real app services when available
 // For now using mock data structure
@@ -652,12 +653,7 @@ export default function AppSettingsPage() {
   };
 
   if (loading) {
-    return (
-      <PageLoader
-        title="Loading Application Settings..."
-        description="Please wait while we load your application settings"
-      />
-    );
+    return <SettingsPageShimmer />;
   }
 
   if (!currentApp) {
@@ -1097,12 +1093,14 @@ export default function AppSettingsPage() {
                 {/* Enhanced App Logo Section in General Tab */}
                 <div className="space-y-4">
                   <Label htmlFor="logo">Application Logo</Label>
-                  
+
                   {/* Current Logo vs Form Logo Comparison */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     {/* Current Saved Logo */}
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Currently Saved</Label>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Currently Saved
+                      </Label>
                       <div className="relative">
                         {currentApp?.generalSettings?.logoUrl ? (
                           <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
@@ -1132,13 +1130,17 @@ export default function AppSettingsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        {currentApp?.generalSettings?.logoUrl ? "Logo active" : "No logo set"}
+                        {currentApp?.generalSettings?.logoUrl
+                          ? "Logo active"
+                          : "No logo set"}
                       </p>
                     </div>
 
                     {/* Form Preview */}
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Preview (Form)</Label>
+                      <Label className="text-sm font-medium text-gray-700">
+                        Preview (Form)
+                      </Label>
                       <div className="relative">
                         {generalForm.watch("logoUrl") ? (
                           <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
@@ -1161,7 +1163,9 @@ export default function AppSettingsPage() {
                             />
                             <button
                               type="button"
-                              onClick={() => generalForm.setValue("logoUrl", "")}
+                              onClick={() =>
+                                generalForm.setValue("logoUrl", "")
+                              }
                               className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                             >
                               <X className="h-3 w-3" />
@@ -1174,7 +1178,9 @@ export default function AppSettingsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        {generalForm.watch("logoUrl") ? "New logo preview" : "Enter URL below"}
+                        {generalForm.watch("logoUrl")
+                          ? "New logo preview"
+                          : "Enter URL below"}
                       </p>
                     </div>
                   </div>
@@ -1219,7 +1225,10 @@ export default function AppSettingsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            generalForm.setValue("logoUrl", currentApp.generalSettings?.logoUrl || "");
+                            generalForm.setValue(
+                              "logoUrl",
+                              currentApp.generalSettings?.logoUrl || ""
+                            );
                           }}
                         >
                           <RefreshCw className="h-4 w-4 mr-2" />
@@ -1228,7 +1237,8 @@ export default function AppSettingsPage() {
                       )}
                     </div>
                     <p className="text-xs text-gray-500">
-                      Recommended: 200x200px, PNG/JPG format. Maximum file size: 5MB
+                      Recommended: 200x200px, PNG/JPG format. Maximum file size:
+                      5MB
                     </p>
                   </div>
 
@@ -1246,7 +1256,8 @@ export default function AppSettingsPage() {
                       </p>
                     )}
                     <p className="text-xs text-gray-500">
-                      Enter a direct URL to your logo image. The image should be publicly accessible.
+                      Enter a direct URL to your logo image. The image should be
+                      publicly accessible.
                     </p>
                   </div>
                 </div>

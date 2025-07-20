@@ -38,12 +38,13 @@ const allowedOrigins = [
   "http://localhost:3001",
   "https://studio.apollographql.com",
 ];
-const authMiddleware = require("./src/middleware/authMiddleware");
+const { authMiddleware } = require("./src/middleware/authMiddleware");
 const {
   loginLimiter,
   resetPasswordLimiter,
 } = require("./src/middleware/rateLimiter");
 const User = require("./src/models/User");
+const appsRouter = require("./src/routes/apps");
 
 const startServer = async () => {
   const app = express();
@@ -74,6 +75,9 @@ const startServer = async () => {
 
   // Apply authentication middleware (attaches req.userId if token is provided)
   app.use(authMiddleware);
+
+  // API routes
+  app.use("/api/apps", appsRouter);
 
   // Apply rate limiters only to specific operations (login and requestPasswordReset)
   app.use("/graphql", (req, res, next) => {

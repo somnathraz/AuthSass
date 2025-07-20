@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,7 +55,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import Link from "next/link";
-import { PageLoader } from "@/components/ui/loading";
+import { SettingsPageShimmer } from "@/components/ui/loading";
 
 // Import our real backend services
 import {
@@ -65,12 +66,6 @@ import {
   useUpdateBrandingSettings,
   useUpdateNotificationSettings,
   useUpdateAnalyticsSettings,
-  type OrganizationSettings,
-  type PasswordPolicy,
-  type DomainSettings,
-  type BrandingSettings,
-  type NotificationSettings,
-  type AnalyticsSettings,
 } from "@/services/organization.service";
 
 // Form schemas for different sections
@@ -452,12 +447,7 @@ export default function OrganizationSettingsPage() {
   };
 
   if (loading) {
-    return (
-      <PageLoader
-        title="Loading Organization Settings..."
-        description="Please wait while we load your organization settings"
-      />
-    );
+    return <SettingsPageShimmer />;
   }
 
   if (error) {
@@ -468,7 +458,8 @@ export default function OrganizationSettingsPage() {
           <div>
             <h3 className="font-medium text-lg">Failed to Load Settings</h3>
             <p className="text-sm text-muted-foreground">
-              We couldn't load your organization settings. Please try again.
+              We couldn&apos;t load your organization settings. Please try
+              again.
             </p>
           </div>
           <Button onClick={() => refetch()} variant="outline">
@@ -521,7 +512,7 @@ export default function OrganizationSettingsPage() {
       <div>
         <h1 className="text-3xl font-bold">Organization Settings</h1>
         <p className="text-gray-600">
-          Manage your organization's authentication and security settings
+          Manage your organization&apos;s authentication and security settings
         </p>
       </div>
 
@@ -615,22 +606,38 @@ export default function OrganizationSettingsPage() {
                       {generalForm.watch("imageUrl") ||
                       organization?.imageUrl ? (
                         <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
-                          <img
-                            src={
-                              generalForm.watch("imageUrl") ||
-                              organization?.imageUrl ||
-                              ""
-                            }
-                            alt="Organization logo"
-                            className="w-full h-full object-cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => generalForm.setValue("imageUrl", "")}
-                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          {(
+                            generalForm.watch("imageUrl") ||
+                            organization?.imageUrl ||
+                            ""
+                          ).includes(".svg") ||
+                          (
+                            generalForm.watch("imageUrl") ||
+                            organization?.imageUrl ||
+                            ""
+                          ).includes("api.dicebear.com") ? (
+                            <img
+                              src={
+                                generalForm.watch("imageUrl") ||
+                                organization?.imageUrl ||
+                                ""
+                              }
+                              alt="Organization logo"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Image
+                              src={
+                                generalForm.watch("imageUrl") ||
+                                organization?.imageUrl ||
+                                ""
+                              }
+                              alt="Organization logo"
+                              width={64}
+                              height={64}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
                         </div>
                       ) : (
                         <div className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
