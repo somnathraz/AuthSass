@@ -198,6 +198,48 @@ class EmailService {
   }
 
   /**
+   * Send magic login link email
+   * @param {string} email - Recipient email
+   * @param {string} token - Magic link token
+   * @param {string} [redirectUri] - Optional redirect after login
+   */
+  async sendMagicLinkEmail(email, token, redirectUri) {
+    const baseUrl = `${process.env.FRONTEND_URL}/magic-login?token=${token}`;
+    const loginUrl = redirectUri ? `${baseUrl}&redirect=${encodeURIComponent(redirectUri)}` : baseUrl;
+
+    const mailOptions = {
+      from: {
+        name: 'Auth SaaS',
+        address: process.env.EMAIL_USER
+      },
+      to: email,
+      subject: 'Your Magic Login Link',
+      html: this.getMagicLinkEmailTemplate(loginUrl),
+      text: `Sign in using this link: ${loginUrl}`
+    };
+
+    try {
+      const result = await this.transporter.sendMail(mailOptions);
+      await auditLog('EMAIL_SENT', null, {
+        type: 'MAGIC_LINK',
+        email,
+        messageId: result.messageId
+      });
+
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error('Failed to send magic link email:', error);
+      await auditLog('EMAIL_FAILED', null, {
+        type: 'MAGIC_LINK',
+        email,
+        error: error.message
+      });
+
+      throw new Error('Failed to send magic link email');
+    }
+  }
+
+  /**
    * Send welcome email
    * @param {string} email - Recipient email
    * @param {string} username - User's username
@@ -390,6 +432,48 @@ class EmailService {
             <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
             <p style="word-break: break-all; color: #28a745;">${acceptUrl}</p>
             <p>This invitation will expire in 7 days.</p>
+          </div>
+          <div class="footer">
+            <p>&copy; 2024 Auth SaaS. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * Get magic link email template
+   * @param {string} loginUrl - Magic login URL
+   * @returns {string} - HTML template
+   */
+  getMagicLinkEmailTemplate(loginUrl) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Your Magic Login Link</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; }
+          .container { max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 20px; }
+          .header { background: #4f46e5; color: white; padding: 20px; text-align: center; }
+          .content { background: white; padding: 30px; }
+          .button { display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+          .footer { text-align: center; color: #666; margin-top: 30px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Magic Login Link</h1>
+          </div>
+          <div class="content">
+            <p>Click the button below to sign in:</p>
+            <a href="${loginUrl}" class="button">Sign In</a>
+            <p>If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #4f46e5;">${loginUrl}</p>
+            <p>This link will expire in 15 minutes.</p>
           </div>
           <div class="footer">
             <p>&copy; 2024 Auth SaaS. All rights reserved.</p>

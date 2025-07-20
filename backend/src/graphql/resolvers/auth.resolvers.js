@@ -20,6 +20,7 @@ const {
   loginSchema,
   signupSchema,
   socialLoginSchema,
+  magicLinkRequestSchema,
 } = require('../../validators/auth.validators');
 
 const authResolvers = {
@@ -564,6 +565,109 @@ const authResolvers = {
         
         // For other errors, throw a generic error
         throw new Error(`Social authentication failed: ${error.message}`);
+      }
+    },
+
+    async requestMagicLink(parent, { input }, context) {
+      const { req } = context;
+
+      try {
+        await rateLimitCheck(req, 'magic_link_request', 5, 3600);
+
+        const { error, value } = validateInput(magicLinkRequestSchema, input);
+        if (error) {
+          throw new UserInputError('Validation failed', {
+            errors: error.details.map(detail => ({
+              field: detail.path.join('.'),
+              message: detail.message,
+              code: 'VALIDATION_ERROR'
+            }))
+          });
+        }
+
+        const { email, redirectUri } = value;
+        const user = await UserService.findByEmail(email);
+
+        if (!user) {
+          return { success: true, message: 'If an account exists, a magic link has been sent', errors: [] };
+        }
+
+        if (user.status !== 'ACTIVE') {
+          throw new ForbiddenError('Account is not active');
+        }
+
+        const token = await TokenService.generateMagicLinkToken(user.id);
+        await EmailService.sendMagicLinkEmail(user.email, token, redirectUri);
+
+        await auditLog('MAGIC_LINK_REQUESTED', user.id, { ip: req.ip });
+
+        return { success: true, message: 'Magic link sent', errors: [] };
+      } catch (error) {
+        if (error instanceof UserInputError || error instanceof ForbiddenError) {
+          throw error;
+        }
+
+        console.error('Magic link request error:', error);
+        throw new Error('Failed to send magic link');
+      }
+    },
+
+    async loginWithMagicLink(parent, { token }, context) {
+      const { req, res, pubsub } = context;
+
+      try {
+        await rateLimitCheck(req, 'magic_link_login', 5, 900);
+
+        const decoded = await TokenService.verifyMagicLinkToken(token);
+        const user = await UserService.findById(decoded.userId);
+
+        if (!user || user.status !== 'ACTIVE') {
+          throw new AuthenticationError('Invalid or expired magic link');
+        }
+
+        const { accessToken, refreshToken, expiresIn } = await TokenService.generateTokens(user);
+
+        res.cookie('token', accessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: expiresIn * 1000
+        });
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        await auditLog('MAGIC_LINK_LOGIN', user.id, { ip: req.ip });
+
+        pubsub.publish('AUTH_STATUS_CHANGED', {
+          authStatusChanged: {
+            userId: user.id,
+            action: 'MAGIC_LINK_LOGIN',
+            timestamp: new Date(),
+            metadata: {}
+          }
+        });
+
+        return {
+          success: true,
+          accessToken,
+          refreshToken,
+          user,
+          requirePasswordReset: false,
+          expiresIn,
+          tokenType: 'Bearer',
+          errors: []
+        };
+      } catch (error) {
+        if (error instanceof AuthenticationError || error instanceof ForbiddenError || error instanceof UserInputError) {
+          throw error;
+        }
+
+        console.error('Magic link login error:', error);
+        throw new Error('Magic link login failed');
       }
     },
 

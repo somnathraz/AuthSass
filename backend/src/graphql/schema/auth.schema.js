@@ -27,6 +27,11 @@ module.exports = gql`
     redirectUri: String
   }
 
+  input MagicLinkRequestInput {
+    email: EmailAddress!
+    redirectUri: String
+  }
+
   input PasswordResetInput {
     token: String!
     newPassword: String!
@@ -100,6 +105,8 @@ module.exports = gql`
     login(input: LoginInput!): AuthPayload!
     signup(input: SignupInput!): SignupPayload!
     socialLogin(input: SocialLoginInput!): AuthPayload!
+    requestMagicLink(input: MagicLinkRequestInput!): SuccessPayload!
+    loginWithMagicLink(token: String!): AuthPayload!
     logout: SuccessPayload!
     
     # Password management
