@@ -3,11 +3,36 @@ const RefreshToken = require("../models/RefreshToken");
 const User = require("../models/User");
 const { generateAccessToken } = require("../utils/auth");
 
-module.exports = async (req, res, next) => {
+/**
+ * Validate SDK token (app secret key)
+ * Used by Webflow and WordPress SDKs
+ */
+const validateSDKToken = async (token) => {
+  try {
+    // Find app by secret key
+    const App = require("../models/App");
+    const app = await App.findOne({
+      secretKey: token,
+      status: "ACTIVE",
+    }).populate("organizationId");
+
+    if (!app) {
+      return null;
+    }
+
+    return app;
+  } catch (error) {
+    console.error("SDK token validation error:", error);
+    return null;
+  }
+};
+
+const authMiddleware = async (req, res, next) => {
   console.log("Cookies:", req.cookies);
 
   // Check if this is a GraphQL request
-  const isGraphQLRequest = req.path === '/graphql' || req.url.includes('/graphql');
+  const isGraphQLRequest =
+    req.path === "/graphql" || req.url.includes("/graphql");
 
   let token;
   if (req.headers.authorization) {
@@ -34,37 +59,45 @@ module.exports = async (req, res, next) => {
           console.log("❌ No refresh token provided.");
           // For GraphQL requests, don't return 401 - let resolvers handle auth
           if (isGraphQLRequest) {
-            console.log("🎫 GraphQL request with expired token - allowing resolver to handle auth");
+            console.log(
+              "🎫 GraphQL request with expired token - allowing resolver to handle auth"
+            );
             return next();
           }
           return res.status(401).json({ error: "Refresh token required." });
         }
-        
+
         try {
-          const storedToken = await RefreshToken.findOne({ token: refreshToken });
+          const storedToken = await RefreshToken.findOne({
+            token: refreshToken,
+          });
           if (!storedToken || storedToken.expiresAt < new Date()) {
             console.log("❌ Invalid or expired refresh token.");
             // For GraphQL requests, don't return 401 - let resolvers handle auth
             if (isGraphQLRequest) {
-              console.log("🎫 GraphQL request with invalid refresh token - allowing resolver to handle auth");
+              console.log(
+                "🎫 GraphQL request with invalid refresh token - allowing resolver to handle auth"
+              );
               return next();
             }
             return res
               .status(401)
               .json({ error: "Refresh token invalid or expired." });
           }
-          
+
           const user = await User.findById(storedToken.userId);
           if (!user) {
             console.log("❌ User not found for refresh token.");
             // For GraphQL requests, don't return 401 - let resolvers handle auth
             if (isGraphQLRequest) {
-              console.log("🎫 GraphQL request with user not found - allowing resolver to handle auth");
+              console.log(
+                "🎫 GraphQL request with user not found - allowing resolver to handle auth"
+              );
               return next();
             }
             return res.status(401).json({ error: "User not found." });
           }
-          
+
           const newAccessToken = generateAccessToken(user);
           console.log("✅ New access token generated!");
           res.setHeader("x-new-access-token", newAccessToken);
@@ -82,17 +115,21 @@ module.exports = async (req, res, next) => {
           console.log("❌ Error during token refresh:", refreshError);
           // For GraphQL requests, don't return 401 - let resolvers handle auth
           if (isGraphQLRequest) {
-            console.log("🎫 GraphQL request with refresh error - allowing resolver to handle auth");
+            console.log(
+              "🎫 GraphQL request with refresh error - allowing resolver to handle auth"
+            );
             return next();
           }
           return res.status(401).json({ error: "Token refresh failed." });
         }
       }
-      
+
       console.log("Invalid token:", err);
       // For GraphQL requests, don't return 401 - let resolvers handle auth
       if (isGraphQLRequest) {
-        console.log("🎫 GraphQL request with invalid token - allowing resolver to handle auth");
+        console.log(
+          "🎫 GraphQL request with invalid token - allowing resolver to handle auth"
+        );
         return next();
       }
       return res.status(401).json({ error: "Invalid token." });
@@ -101,4 +138,9 @@ module.exports = async (req, res, next) => {
 
   console.log("No token found");
   next();
+};
+
+module.exports = {
+  authMiddleware,
+  validateSDKToken,
 };
