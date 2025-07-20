@@ -1,87 +1,231 @@
-const { gql } = require('apollo-server-express');
+const { gql } = require("apollo-server-express");
 
-const auditSchema = gql`
-  extend type Query {
-    auditLogs(
-      limit: Int = 50
-      offset: Int = 0
-      sortBy: String = "timestamp"
-      sortOrder: SortOrder = DESC
-      filter: AuditLogFilter
-    ): AuditLogConnection!
-    auditLog(id: ID!): AuditLog
-    userAuditLogs(userId: ID!, limit: Int = 20, offset: Int = 0): AuditLogConnection!
-    organizationAuditLogs(orgId: ID!, limit: Int = 20, offset: Int = 0): AuditLogConnection!
-    appAuditLogs(appId: ID!, limit: Int = 20, offset: Int = 0): AuditLogConnection!
-    auditStats(filter: AuditStatsFilter): AuditStats!
+const auditTypeDefs = gql`
+  # Enum for audit log tiers
+  enum AuditLogTier {
+    PLATFORM
+    CUSTOMER
+    APPLICATION
   }
 
-  type AuditLog implements Node & Timestamped {
-    id: ID!
-    action: String!
-    userId: ID
-    user: User
-    metadata: JSON!
+  # Enum for event categories
+  enum EventCategory {
+    AUTHENTICATION
+    AUTHORIZATION
+    ORGANIZATION
+    APPLICATION
+    USER_MANAGEMENT
+    API_KEY
+    SETTINGS
+    BILLING
+    SECURITY
+    INTEGRATION
+    SYSTEM
+  }
+
+  # Enum for actor types
+  enum ActorType {
+    USER
+    ADMIN
+    SYSTEM
+    API_KEY
+    WEBHOOK
+  }
+
+  # Actor information
+  type AuditActor {
+    id: ID
+    type: ActorType!
+    email: String
+    name: String
     ip: String
     userAgent: String
-    timestamp: DateTime!
-    createdAt: DateTime!
-    updatedAt: DateTime!
+    location: String
   }
 
-  type AuditLogConnection {
+  # Event metadata
+  type AuditMetadata {
+    organizationName: String
+    applicationName: String
+    targetUserId: String
+    targetUserEmail: String
+    changes: String # JSON string of before/after changes
+    apiKeyId: String
+    sessionId: String
+    requestId: String
+    platform: String
+    customData: String # JSON string for additional data
+  }
+
+  # Main audit log type
+  type AuditLog {
+    id: ID!
+    logTier: AuditLogTier!
+
+    # Hierarchical identifiers
+    customerId: ID
+    applicationId: ID
+
+    # Event details
+    eventType: String!
+    eventCategory: EventCategory!
+    description: String!
+
+    # Actor information
+    actor: AuditActor!
+
+    # Metadata
+    metadata: AuditMetadata
+
+    # Timestamps
+    timestamp: String!
+    createdAt: String!
+
+    # Status
+    severity: String # LOW, MEDIUM, HIGH, CRITICAL
+    success: Boolean!
+  }
+
+  # Input types for filtering
+  input AuditLogFilter {
+    logTier: AuditLogTier
+    customerId: ID
+    applicationId: ID
+    eventCategory: EventCategory
+    actorType: ActorType
+    severity: String
+    success: Boolean
+    startDate: String
+    endDate: String
+    searchTerm: String # Search in eventType, description
+  }
+
+  # Pagination input
+  input PaginationInput {
+    page: Int = 1
+    limit: Int = 20
+    sortBy: String = "timestamp"
+    sortOrder: String = "DESC"
+  }
+
+  # Paginated audit logs response
+  type PaginatedAuditLogs {
     logs: [AuditLog!]!
-    total: Int!
+    pagination: Pagination!
+  }
+
+  type Pagination {
+    page: Int!
+    limit: Int!
+    totalCount: Int!
+    totalPages: Int!
     hasNextPage: Boolean!
     hasPreviousPage: Boolean!
-    currentPage: Int!
-    totalPages: Int!
   }
 
-  type AuditStats {
-    timeframe: String!
-    totalCount: Int!
-    topActions: [ActionStat!]!
-    topUsers: [UserStat!]!
-    recentLogs: [AuditLog!]!
+  # Analytics aggregation types
+  type AuditAnalytics {
+    totalEvents: Int!
+    eventsByCategory: [CategoryCount!]!
+    eventsByTier: [TierCount!]!
+    recentActivity: [AuditLog!]!
+    topActors: [ActorActivity!]!
+    successRate: Float!
+    timelineData: [TimelinePoint!]!
   }
 
-  type ActionStat {
-    action: String!
+  type CategoryCount {
+    category: EventCategory!
     count: Int!
   }
 
-  type UserStat {
-    userId: ID!
-    username: String
-    email: String
+  type TierCount {
+    tier: AuditLogTier!
     count: Int!
   }
 
-  input AuditLogFilter {
-    action: String
-    userId: ID
-    startDate: DateTime
-    endDate: DateTime
-    ip: String
-    search: String
+  type ActorActivity {
+    actorId: String!
+    actorEmail: String
+    eventCount: Int!
+    lastActivity: String!
   }
 
-  input AuditStatsFilter {
-    timeframe: AuditTimeframe = DAY
-    startDate: DateTime
-    endDate: DateTime
-    userId: ID
-    orgId: ID
-    appId: ID
+  type TimelinePoint {
+    date: String!
+    count: Int!
+    successCount: Int!
+    failureCount: Int!
   }
 
-  enum AuditTimeframe {
-    DAY
-    WEEK
-    MONTH
-    YEAR
+  # Queries
+  type Query {
+    # Get audit logs with filtering and pagination
+    auditLogs(
+      filter: AuditLogFilter
+      pagination: PaginationInput
+    ): PaginatedAuditLogs!
+
+    # Get specific audit log by ID
+    auditLog(id: ID!): AuditLog
+
+    # Get platform-tier logs (admin only)
+    platformAuditLogs(
+      filter: AuditLogFilter
+      pagination: PaginationInput
+    ): PaginatedAuditLogs!
+
+    # Get customer-tier logs for specific organization
+    customerAuditLogs(
+      customerId: ID!
+      filter: AuditLogFilter
+      pagination: PaginationInput
+    ): PaginatedAuditLogs!
+
+    # Get application-tier logs for specific app
+    applicationAuditLogs(
+      applicationId: ID!
+      filter: AuditLogFilter
+      pagination: PaginationInput
+    ): PaginatedAuditLogs!
+
+    # Get audit analytics for dashboard
+    auditAnalytics(
+      customerId: ID
+      applicationId: ID
+      timeRange: String = "7d" # 1d, 7d, 30d, 90d
+    ): AuditAnalytics!
+
+    # Export audit logs (returns download URL)
+    exportAuditLogs(
+      filter: AuditLogFilter
+      format: String = "JSON" # JSON, CSV
+    ): String!
+  }
+
+  # Mutations
+  type Mutation {
+    # Manual audit log creation (for testing/admin)
+    createAuditLog(
+      logTier: AuditLogTier!
+      customerId: ID
+      applicationId: ID
+      eventType: String!
+      eventCategory: EventCategory!
+      description: String!
+      actorId: ID
+      actorType: ActorType!
+      metadata: String # JSON string
+      severity: String = "LOW"
+    ): AuditLog!
+
+    # Bulk delete old audit logs (admin only)
+    cleanupAuditLogs(
+      olderThanDays: Int!
+      logTier: AuditLogTier
+      dryRun: Boolean = true
+    ): Int! # Returns count of logs that would be/were deleted
   }
 `;
 
-module.exports = auditSchema; 
+module.exports = auditTypeDefs;
